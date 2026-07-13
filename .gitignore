@@ -1,0 +1,8 @@
+node_modules/
+lib/
+*.js.map
+tsc-out.txt
+vitest-out.txt
+.env
+.env.*
+!.env.example
