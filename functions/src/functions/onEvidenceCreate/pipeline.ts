@@ -462,6 +462,16 @@ async function downloadFile(
 /**
  * Retries an async operation up to maxAttempts times on any thrown error.
  * Does NOT retry on success.
+ *
+ * Backoff: exponential — 200ms × 2^(attempt-1)
+ *   attempt 1 fails → wait 200ms  before attempt 2
+ *   attempt 2 fails → wait 400ms  before attempt 3
+ *   attempt 3 fails → wait 800ms  before attempt 4 (if maxAttempts > 3)
+ *
+ * NOTE: withRetry is intentionally NOT used for hash verification (Step 3–4).
+ * A hash mismatch is a deterministic integrity signal — retrying cannot fix it
+ * and would mask a real tampering event. Step 4 exits immediately via a direct
+ * early-return, never entering withRetry. (Req 3.2, design §Step 4)
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
@@ -476,8 +486,8 @@ export async function withRetry<T>(
       lastErr = err instanceof Error ? err : new Error(String(err));
       if (onRetry) onRetry(lastErr, attempt);
       if (attempt === maxAttempts) break;
-      // Brief backoff: 200ms × attempt (200, 400, 600ms)
-      await new Promise((r) => setTimeout(r, 200 * attempt));
+      // Exponential backoff: 200ms × 2^(attempt-1)
+      await new Promise((r) => setTimeout(r, 200 * Math.pow(2, attempt - 1)));
     }
   }
   throw lastErr;
