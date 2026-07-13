@@ -1,0 +1,9 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Placeholder — will be replaced in Phase 11
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

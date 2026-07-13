@@ -1,0 +1,28 @@
+{
+  "name": "raksha-functions",
+  "version": "1.0.0",
+  "description": "RAKSHA Evidence Trail — Firebase Cloud Functions",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "@google-cloud/kms": "4.5.0",
+    "firebase-admin": "12.3.0",
+    "firebase-functions": "5.0.1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "3.0.4",
+    "@types/node": "18.19.34",
+    "fast-check": "3.20.0",
+    "typescript": "5.4.5",
+    "vitest": "1.6.0"
+  }
+}
