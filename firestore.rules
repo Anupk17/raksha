@@ -1,7 +1,60 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Placeholder — will be replaced in Phase 11
+
+    // -----------------------------------------------------------------------
+    // Helper: check whether a user holds an active (non-revoked) GrantedContact
+    // relationship for a given owner's evidence.
+    // -----------------------------------------------------------------------
+    function isActiveGrantedContact(uid, ownerId) {
+      return exists(/databases/$(database)/documents/grantedContacts/$(ownerId)/contacts/$(uid))
+        && get(/databases/$(database)/documents/grantedContacts/$(ownerId)/contacts/$(uid)).data.revoked != true;
+    }
+
+    // -----------------------------------------------------------------------
+    // /evidence/{evidenceId}
+    //
+    // Write-once from the client:
+    //   - allow create: authenticated user, document owned by creator, initial
+    //                   status must be 'uploading' (Req 6.1, 11.2)
+    //   - allow read:   owner OR active non-revoked GrantedContact (Req 7.1, 7.2)
+    //   - allow update: DENY ALL — no client carve-outs whatsoever.
+    //                   All post-creation writes go through Cloud Functions via
+    //                   Admin SDK, which bypasses these rules entirely. (Req 6.2, 6.4)
+    //                   The previously-considered 'failed' carve-out was removed
+    //                   because it created an exploitable race window (see design.md
+    //                   §Client Write Carve-Out: Security Analysis and Resolution).
+    //   - allow delete: DENY ALL (Req 6.3)
+    // -----------------------------------------------------------------------
+    match /evidence/{evidenceId} {
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'uploading';
+
+      allow read: if request.auth != null
+                  && (
+                    resource.data.userId == request.auth.uid
+                    || isActiveGrantedContact(request.auth.uid, resource.data.userId)
+                  );
+
+      // No client update exceptions — fully write-once after creation.
+      allow update: if false;
+
+      allow delete: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // /grantedContacts/{ownerId}/contacts/{contactUid}
+    //
+    // Written exclusively by grantEvidenceAccess and revokeEvidenceAccess
+    // Cloud Functions via Admin SDK. Clients may not read or write this
+    // sub-collection directly.
+    // -----------------------------------------------------------------------
+    match /grantedContacts/{ownerId}/contacts/{contactUid} {
+      allow read, write: if false;
+    }
+
+    // Catch-all: deny everything not explicitly matched above.
     match /{document=**} {
       allow read, write: if false;
     }

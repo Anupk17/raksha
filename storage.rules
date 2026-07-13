@@ -1,7 +1,31 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Placeholder — will be replaced in Phase 11
+
+    // -----------------------------------------------------------------------
+    // Evidence files: /evidence/{evidenceId}/{filename}
+    //
+    // Client reads: DENY ALL (Req 6.5)
+    //   All file access is mediated through serveEvidenceFile and
+    //   generateLegalExport Cloud Functions, which authenticate the caller,
+    //   check ownership/GrantedContact, and decrypt the file via KMS before
+    //   serving bytes. No client ever reads raw Storage bytes directly.
+    //
+    // Client writes: allow initial upload (authenticated users only).
+    //   The Cloud Function (onEvidenceCreate) immediately overwrites the
+    //   uploaded raw bytes with AES-256-GCM ciphertext via Admin SDK.
+    //   After that point no client write is needed or permitted.
+    // -----------------------------------------------------------------------
+    match /evidence/{evidenceId}/{filename} {
+      // Deny all client reads — Cloud Functions use Admin SDK which bypasses rules.
+      allow read: if false;
+
+      // Allow the initial client upload (raw bytes, pre-encryption).
+      // Admin SDK overwrites with encrypted bytes immediately after.
+      allow write: if request.auth != null;
+    }
+
+    // Deny everything else.
     match /{allPaths=**} {
       allow read, write: if false;
     }
