@@ -92,8 +92,17 @@ export function getAdminFirestore(): Firestore {
   if (adminFirestore) return adminFirestore;
 
   adminFirestore = getFirestore(getAdminApp());
-  // settings() may only be called once per Firestore instance
-  adminFirestore.settings({ host: FIRESTORE_EMULATOR_HOST, ssl: false });
+  // settings() may only be called once per Firestore instance.
+  // In multi-file test runs under Vitest, module re-evaluation can cause
+  // settings() to be called again on the same global Firestore instance.
+  // We catch and ignore the "already been initialized" error safely.
+  try {
+    adminFirestore.settings({ host: FIRESTORE_EMULATOR_HOST, ssl: false });
+  } catch (err: any) {
+    if (!err.message?.includes("already been initialized")) {
+      throw err;
+    }
+  }
   return adminFirestore;
 }
 

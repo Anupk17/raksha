@@ -54,9 +54,35 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // -----------------------------------------------------------------------
+    // /sosSessions/{sessionId}
+    //
+    // Write-once from client is denied completely: all writes go through Cloud
+    // Functions via Admin SDK (Req 3, design.md §Firestore Security Rules).
+    //
+    // Read: authenticated owner only.
+    // -----------------------------------------------------------------------
+    match /sosSessions/{sessionId} {
+      allow read: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // /users/{userId}
+    //
+    // Permits owner read/write of their user document, which will contain
+    // silentActivationConfig.
+    // -----------------------------------------------------------------------
+    match /users/{userId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
     // Catch-all: deny everything not explicitly matched above.
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
+
