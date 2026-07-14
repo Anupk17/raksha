@@ -67,43 +67,38 @@ export async function cleanupTestEnv(): Promise<void> {
 // Admin SDK (bypasses security rules — for setup and assertion)
 // ---------------------------------------------------------------------------
 
-let adminApp: App | null = null;
-let adminFirestore: Firestore | null = null;
+interface GlobalAdminState {
+  _adminApp?: App;
+  _adminFirestore?: Firestore;
+}
+
+const globalState = globalThis as unknown as GlobalAdminState;
 
 export function getAdminApp(): App {
-  if (adminApp) return adminApp;
+  if (globalState._adminApp) return globalState._adminApp;
 
   // Point Admin SDK at the Emulator — must be set before any Firestore call
   process.env["FIRESTORE_EMULATOR_HOST"] = FIRESTORE_EMULATOR_HOST;
   process.env["FIREBASE_STORAGE_EMULATOR_HOST"] = STORAGE_EMULATOR_HOST;
 
   if (getApps().length === 0) {
-    adminApp = initializeApp({
+    globalState._adminApp = initializeApp({
       projectId: EMULATOR_PROJECT_ID,
       storageBucket: `${EMULATOR_PROJECT_ID}.appspot.com`,
     });
   } else {
-    adminApp = getApps()[0]!;
+    globalState._adminApp = getApps()[0]!;
   }
-  return adminApp;
+  return globalState._adminApp;
 }
 
 export function getAdminFirestore(): Firestore {
-  if (adminFirestore) return adminFirestore;
+  if (globalState._adminFirestore) return globalState._adminFirestore;
 
-  adminFirestore = getFirestore(getAdminApp());
-  // settings() may only be called once per Firestore instance.
-  // In multi-file test runs under Vitest, module re-evaluation can cause
-  // settings() to be called again on the same global Firestore instance.
-  // We catch and ignore the "already been initialized" error safely.
-  try {
-    adminFirestore.settings({ host: FIRESTORE_EMULATOR_HOST, ssl: false });
-  } catch (err: any) {
-    if (!err.message?.includes("already been initialized")) {
-      throw err;
-    }
-  }
-  return adminFirestore;
+  globalState._adminFirestore = getFirestore(getAdminApp());
+  // settings() may only be called once per Firestore instance
+  globalState._adminFirestore.settings({ host: FIRESTORE_EMULATOR_HOST, ssl: false });
+  return globalState._adminFirestore;
 }
 
 export function getAdminStorage(): Storage {
