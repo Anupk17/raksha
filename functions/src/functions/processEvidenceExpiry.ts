@@ -18,6 +18,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { getRetentionPeriodDays } from "../utils/retentionConfig.js";
 import { computeIntegritySnapshot } from "../utils/integritySnapshot.js";
+import { deserializeFirestoreDate } from "../utils/assertDate.js";
 import type { ChainOfCustodyEntry, EvidenceDocument } from "../types/evidence.js";
 import type { PipelineLogger } from "./onEvidenceCreate/pipeline.js";
 
@@ -77,7 +78,9 @@ export async function runProcessEvidenceExpiry(
 
         let integritySnapshot: string | null = null;
         try {
-          integritySnapshot = computeIntegritySnapshot(data as unknown as EvidenceDocument);
+          const docData = { ...data };
+          docData["createdAt"] = deserializeFirestoreDate(docData["createdAt"], "createdAt");
+          integritySnapshot = computeIntegritySnapshot(docData as unknown as EvidenceDocument);
         } catch { /* non-fatal */ }
 
         const entry: ChainOfCustodyEntry = {

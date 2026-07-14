@@ -28,7 +28,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import type { Storage } from "firebase-admin/storage";
 import type { KMSClient } from "../kms/kms.interface.js";
 import { runEvidenceCreatePipeline, type PipelineLogger } from "./onEvidenceCreate/pipeline.js";
-import { assertDate } from "../utils/assertDate.js";
+import { deserializeFirestoreDate } from "../utils/assertDate.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,11 +118,7 @@ export async function runRetriggerProcessing(
   const rawUpdatedAt = data["updatedAt"];
   let updatedAt: Date;
   try {
-    if (rawUpdatedAt && typeof (rawUpdatedAt as { toDate?: unknown }).toDate === "function") {
-      updatedAt = (rawUpdatedAt as { toDate: () => Date }).toDate();
-    } else {
-      updatedAt = assertDate(rawUpdatedAt, "updatedAt");
-    }
+    updatedAt = deserializeFirestoreDate(rawUpdatedAt, "updatedAt");
   } catch {
     const err = new Error(
       `retriggerProcessing: could not deserialize updatedAt for '${evidenceId}'`

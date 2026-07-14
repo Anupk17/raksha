@@ -4,7 +4,6 @@
  * Property 14: Legal Hold Preservation
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import fc from "fast-check";
 import { runProcessEvidenceExpiry } from "./processEvidenceExpiry.js";
 import type { PipelineLogger } from "./onEvidenceCreate/pipeline.js";
 import type { ChainOfCustodyEntry } from "../types/evidence.js";
@@ -49,7 +48,6 @@ function makeDb(
     }),
     runTransaction: vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<void>) => {
       // We need a closure per doc — vitest runs them sequentially in singleFork mode
-      let callIdx = 0;
       const tx = {
         get: vi.fn().mockImplementation(async (ref: { path: string }) => {
           const docId = ref.path.split("/")[1]!;
@@ -140,7 +138,7 @@ describe("processEvidenceExpiry — legal hold protection (Req 8.3, P14)", () =>
     const { db, updates } = makeDb([doc], { "ev-001": "legal_hold" });
     const logger = makeLogger();
 
-    const result = await runProcessEvidenceExpiry(db, logger);
+    await runProcessEvidenceExpiry(db, logger);
 
     expect(updates["ev-001"]).toBeUndefined(); // no write committed
     const skipLogs = logger.messages.filter(m => m.text.includes("Skipped") && m.text.includes("ev-001"));

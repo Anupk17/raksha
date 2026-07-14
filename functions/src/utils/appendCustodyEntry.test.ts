@@ -37,7 +37,7 @@ function makeMockTransaction(
 ): {
   tx: {
     get: (ref: { path: string }) => Promise<{ exists: boolean; data: () => MockDocData | undefined }>;
-    update: ReturnType<typeof vi.fn>;
+    update: (...args: unknown[]) => void;
   };
   capturedUpdates: { chainOfCustody?: ChainOfCustodyEntry[]; updatedAt?: Date }[];
 } {

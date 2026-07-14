@@ -11,6 +11,8 @@ export default defineConfig({
     },
     environment: "node",
     globals: true,
+    // Exclude integration tests — they require the Firebase Emulator (run via test:integration script)
+    exclude: ["**/*.integration.test.ts", "**/node_modules/**"],
     // Activate KMSMock for all tests
     env: {
       NODE_ENV: "test",

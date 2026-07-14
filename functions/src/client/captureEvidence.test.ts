@@ -1,11 +1,12 @@
 /**
  * Tests for the client upload orchestrator (Phase 10, tasks 10.3–10.6).
  *
+ * Property 3: All Required Fields Present at Creation
  * Property 4: Upload Idempotency
- * Requirements: 1.1, 1.2, 1.7, 2.1–2.7
+ * Requirements: 1.1, 1.2, 1.4, 1.7, 2.1–2.7, 11.2
  */
 import { describe, it, expect, vi } from "vitest";
-import fc from "fast-check";
+import * as fc from "fast-check";
 import crypto from "crypto";
 import { captureEvidence } from "./captureEvidence.js";
 import { MAX_FILE_SIZE_BYTES } from "./validateFile.js";
@@ -203,5 +204,105 @@ describe("captureEvidence — idempotency branches (P4, Req 2.1–2.4)", () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toBe("TERMINAL_FAILURE");
     expect(firestore.createDocument).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fast-Check Property Tests (Phase 12)
+// ---------------------------------------------------------------------------
+describe("captureEvidence — property tests (P3, P4)", () => {
+  // Arbitraries for fast-check
+  const fileArb = fc.record({
+    name: fc.string({ minLength: 1, maxLength: 100 }),
+    type: fc.oneof(
+      fc.constant("image/jpeg"),
+      fc.constant("image/png"),
+      fc.constant("video/mp4"),
+      fc.constant("audio/mpeg"),
+      fc.constant("application/pdf")
+    ),
+    size: fc.integer({ min: 1, max: MAX_FILE_SIZE_BYTES }),
+  }).chain(({ name, type, size }) => {
+    const data = crypto.randomBytes(size);
+    return fc.constant({
+      name,
+      type,
+      size,
+      arrayBuffer: async () => data.buffer as ArrayBuffer,
+      _data: data,
+    });
+  });
+
+  const metadataArb = fc.record({
+    incidentId: fc.string({ minLength: 1, maxLength: 100 }),
+    capturedAt: fc.date(),
+    deviceInfo: fc.string({ minLength: 1, maxLength: 200 }),
+    locationHash: fc.option(fc.string({ minLength: 1, maxLength: 100 }), { nil: null }),
+    incidentContext: fc.option(fc.string({ minLength: 1, maxLength: 1000 }), { nil: null }),
+  });
+
+  const evidenceIdArb = fc.string({ minLength: 1, maxLength: 100 });
+  const userIdArb = fc.string({ minLength: 1, maxLength: 100 });
+
+  it("P3: All required fields are present in created document (fast-check, 100 runs)", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        evidenceIdArb,
+        userIdArb,
+        fileArb,
+        metadataArb,
+        async (evidenceId, userId, file, metadata) => {
+          const { firestore, created } = makeAdapters({ existingDoc: null });
+          await captureEvidence(evidenceId, file, userId, metadata, firestore, { upload: vi.fn() }, { call: vi.fn() }, sha256hash);
+          expect(created.length).toBeGreaterThanOrEqual(1);
+          const doc = (created[0] as { id: string; doc: Record<string, unknown> }).doc;
+
+          // Check all required fields are present
+          expect(doc["evidenceId"]).toBe(evidenceId);
+          expect(doc["incidentId"]).toBe(metadata.incidentId);
+          expect(doc["userId"]).toBe(userId);
+          expect(["photo", "video", "audio", "screenshot", "document"]).toContain(doc["type"]);
+          expect(doc["storageRef"]).toBeTruthy();
+          expect(doc["originalFilename"]).toBe(file.name);
+          expect(doc["mimeType"]).toBe(file.type);
+          expect(doc["sizeBytes"]).toBe(file.size);
+          expect(doc["sha256Hash"]).toMatch(/^[0-9a-f]{64}$/);
+          expect(doc["status"]).toBe("uploading");
+          expect(doc["createdAt"]).toBeInstanceOf(Date);
+          expect(doc["updatedAt"]).toBeInstanceOf(Date);
+          expect((doc["metadata"] as Record<string, unknown>)["capturedAt"]).toBeInstanceOf(Date);
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  it("P4: Upload idempotency holds for arbitrary valid inputs (fast-check, 100 runs)", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        evidenceIdArb,
+        userIdArb,
+        fileArb,
+        metadataArb,
+        async (evidenceId, userId, file, metadata) => {
+          const { firestore, storage, functions, uploads } = makeAdapters({ existingDoc: null });
+          
+          // First upload succeeds
+          const result1 = await captureEvidence(evidenceId, file, userId, metadata, firestore, storage, functions, sha256hash);
+          expect(result1.success).toBe(true);
+
+          // Now set existingDoc to status:available
+          firestore.getDocument = vi.fn().mockResolvedValue({ status: "available", updatedAt: new Date() });
+          firestore.getDocumentWithRetry = vi.fn().mockResolvedValue({ status: "available", updatedAt: new Date() });
+
+          // Second upload should return idempotent success
+          const result2 = await captureEvidence(evidenceId, file, userId, metadata, firestore, storage, functions, sha256hash);
+          expect(result2.success).toBe(true);
+          if (result2.success) expect(result2.idempotent).toBe(true);
+          expect(uploads.length).toBe(1); // Only the first upload happened
+        }
+      ),
+      { numRuns: 100 }
+    );
   });
 });

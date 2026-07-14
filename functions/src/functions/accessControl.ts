@@ -17,6 +17,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { appendCustodyEntry } from "../utils/appendCustodyEntry.js";
 import { computeIntegritySnapshot } from "../utils/integritySnapshot.js";
 import { computeRetentionExpiresAt, getRetentionPeriodDays } from "../utils/retentionConfig.js";
+import { deserializeFirestoreDate } from "../utils/assertDate.js";
 import type { ChainOfCustodyEntry, EvidenceDocument, GrantedContact } from "../types/evidence.js";
 
 // ---------------------------------------------------------------------------
@@ -48,7 +49,9 @@ async function guardOwner(
 
 function safeSnapshot(data: Record<string, unknown>): string | null {
   try {
-    return computeIntegritySnapshot(data as unknown as EvidenceDocument);
+    const docData = { ...data };
+    docData["createdAt"] = deserializeFirestoreDate(docData["createdAt"], "createdAt");
+    return computeIntegritySnapshot(docData as unknown as EvidenceDocument);
   } catch { return null; }
 }
 

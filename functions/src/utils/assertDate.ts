@@ -77,6 +77,20 @@ export function assertDate(value: unknown, fieldName: string): Date {
 }
 
 /**
+ * Deserializes a Firestore timestamp field that may arrive as either a native
+ * Date or a Firestore Timestamp (Admin SDK returns Timestamp on read).
+ */
+export function deserializeFirestoreDate(
+  value: unknown,
+  fieldName: string
+): Date {
+  if (value && typeof (value as { toDate?: unknown }).toDate === "function") {
+    return assertDate((value as { toDate: () => Date }).toDate(), fieldName);
+  }
+  return assertDate(value, fieldName);
+}
+
+/**
  * Like assertDate, but accepts null (for nullable timestamp fields such as
  * retentionExpiresAt and revokedAt).
  *
@@ -90,5 +104,5 @@ export function assertDateOrNull(
   if (value === null || value === undefined) {
     return null;
   }
-  return assertDate(value, fieldName);
+  return deserializeFirestoreDate(value, fieldName);
 }

@@ -34,8 +34,9 @@ import type { Firestore, DocumentReference } from "firebase-admin/firestore";
 import type { Storage } from "firebase-admin/storage";
 import type { KMSClient } from "../../kms/kms.interface.js";
 import { aesGcmEncrypt } from "../../utils/aesGcm.js";
-import { appendCustodyEntry } from "../../utils/appendCustodyEntry.js";
-import { assertDate, assertDateOrNull } from "../../utils/assertDate.js";
+// appendCustodyEntry is NOT called here — pipeline transactions combine status + custody in one
+// tx.update() call for atomicity. The inline [...current, entry] pattern is intentional.
+import { deserializeFirestoreDate, assertDateOrNull } from "../../utils/assertDate.js";
 import { computeIntegritySnapshot } from "../../utils/integritySnapshot.js";
 import {
   getRetentionPeriodDays,
@@ -111,8 +112,8 @@ export async function runEvidenceCreatePipeline(
   }
   const docData = docSnap.data() as Record<string, unknown>;
 
-  // Deserialize all timestamp fields — assertDate throws on Firestore Timestamp
-  const createdAt = assertDate(docData["createdAt"], "createdAt");
+  // Deserialize timestamp fields — Admin SDK may return Firestore Timestamp on read
+  const createdAt = deserializeFirestoreDate(docData["createdAt"], "createdAt");
   assertDateOrNull(docData["retentionExpiresAt"], "retentionExpiresAt"); // nullable, just validate
   const clientHash = docData["sha256Hash"] as string;
   const storageRef = docData["storageRef"] as string;
@@ -506,7 +507,9 @@ function safeIntegritySnapshot(
   try {
     // computeIntegritySnapshot needs a typed EvidenceDocument subset.
     // Cast from raw Firestore data — fields must exist or it will throw.
-    return computeIntegritySnapshot(docData as unknown as EvidenceDocument);
+    const data = { ...docData };
+    data["createdAt"] = deserializeFirestoreDate(data["createdAt"], "createdAt");
+    return computeIntegritySnapshot(data as unknown as EvidenceDocument);
   } catch (err) {
     logger.warn(
       `[onEvidenceCreate] Could not compute integritySnapshot for ${evidenceId}: ` +

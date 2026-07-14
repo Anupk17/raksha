@@ -16,8 +16,7 @@
  *
  * Feature: evidence-trail, Phase 2: onEvidenceCreate pipeline
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import fc from "fast-check";
+import { describe, it, expect, vi } from "vitest";
 import crypto from "crypto";
 import {
   runEvidenceCreatePipeline,
@@ -108,7 +107,7 @@ function makeDb(snapData: Record<string, unknown> | null) {
     collection: vi.fn().mockReturnValue({
       doc: vi.fn().mockReturnValue(makeRef()),
     }),
-    runTransaction: vi.fn().mockImplementation(async (fn: (tx: typeof tx) => Promise<void>) => {
+    runTransaction: vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<void>) => {
       await fn(tx);
     }),
   } as unknown as import("firebase-admin/firestore").Firestore;
@@ -220,12 +219,14 @@ describe("withRetry", () => {
     // Attempt 2 fails → waits 400ms (200 × 2^1)
     // Attempt 3 fails → throws (no further wait)
     const delays: number[] = [];
-    const originalSetTimeout = global.setTimeout;
-    vi.spyOn(global, "setTimeout").mockImplementation((fn: (...args: unknown[]) => void, ms?: number) => {
-      delays.push(ms ?? 0);
-      fn(); // execute immediately so the test doesn't actually wait
-      return 0 as unknown as ReturnType<typeof setTimeout>;
-    });
+    vi.spyOn(global, "setTimeout").mockImplementation(
+      // Cast needed: vitest spy types don't perfectly match Node's setTimeout overloads
+      ((fn: () => void, ms?: number) => {
+        delays.push(ms ?? 0);
+        fn();
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout
+    );
     try {
       const fn = vi.fn().mockRejectedValue(new Error("fail"));
       await expect(withRetry(fn, 3)).rejects.toThrow("fail");
@@ -415,8 +416,7 @@ describe("step12_unrecoverableError", () => {
     expect(criticalMsgs[0]!.text).toContain("Manual remediation required");
     // Status is still set to encryption_failed despite cleanup failure
     // (the document must be flagged even if the blob couldn't be deleted)
-    const { updates } = makeDb(docData);
-    // Re-run against a db that can accept the update to verify status is written
+    // Re-run to verify status is written (variable intentionally not used — we check via logger)
     await step12_unrecoverableError(
       makeRef(), db, "ev-001", bucket.file("orphaned-blob"),
       true, new Error("KMS failed"), makeLogger()

@@ -25,10 +25,9 @@
  * Design: §reportUploadFailure Function Design
  */
 import type { Firestore } from "firebase-admin/firestore";
-import { assertDate } from "../utils/assertDate.js";
-import type { ChainOfCustodyEntry } from "../types/evidence.js";
+import type { EvidenceDocument, ChainOfCustodyEntry } from "../types/evidence.js";
 import { computeIntegritySnapshot } from "../utils/integritySnapshot.js";
-import type { EvidenceDocument } from "../types/evidence.js";
+import { deserializeFirestoreDate } from "../utils/assertDate.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -126,9 +125,7 @@ export async function runReportUploadFailure(
     try {
       // Deserialize createdAt so computeIntegritySnapshot can call toISOString()
       const raw = txData["createdAt"];
-      if (raw && typeof (raw as { toDate?: unknown }).toDate === "function") {
-        txData["createdAt"] = (raw as { toDate: () => Date }).toDate();
-      }
+      txData["createdAt"] = deserializeFirestoreDate(raw, "createdAt");
       integritySnapshot = computeIntegritySnapshot(
         txData as unknown as EvidenceDocument
       );

@@ -159,9 +159,12 @@ describe("assertDateOrNull", () => {
     expect(() =>
       assertDateOrNull("2025-06-01T00:00:00Z", "retentionExpiresAt")
     ).toThrow(TimestampDeserializationError);
-    expect(() =>
-      assertDateOrNull(firestoreTimestampLike, "retentionExpiresAt")
-    ).toThrow(TimestampDeserializationError);
+  });
+
+  it("converts a Firestore Timestamp-shaped object via toDate()", () => {
+    const result = assertDateOrNull(firestoreTimestampLike, "retentionExpiresAt");
+    expect(result).toBeInstanceOf(Date);
+    expect(result!.getTime()).toBe(1_700_000_000_000);
   });
 
   it(

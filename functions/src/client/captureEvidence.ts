@@ -14,7 +14,7 @@
  * Design: §Upload Flow — Client-Side Steps
  */
 import { validateFile, type EvidenceFileType } from "./validateFile.js";
-import { checkIdempotency, STALENESS_THRESHOLD_SECONDS } from "./checkIdempotency.js";
+import { checkIdempotency } from "./checkIdempotency.js";
 import type { UploadResult, EvidenceDocument } from "../types/evidence.js";
 
 // ---------------------------------------------------------------------------

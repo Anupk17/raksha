@@ -24,6 +24,7 @@ import type { KMSClient } from "../kms/kms.interface.js";
 import { aesGcmDecrypt } from "../utils/aesGcm.js";
 import { appendCustodyEntry } from "../utils/appendCustodyEntry.js";
 import { computeIntegritySnapshot } from "../utils/integritySnapshot.js";
+import { deserializeFirestoreDate } from "../utils/assertDate.js";
 import type { ChainOfCustodyEntry, EvidenceDocument } from "../types/evidence.js";
 import type { PipelineLogger } from "./onEvidenceCreate/pipeline.js";
 
@@ -121,7 +122,9 @@ export async function runServeEvidenceFile(
   // Step 7 — Append 'viewed' custody entry within 5 seconds of invocation
   let integritySnapshot: string | null = null;
   try {
-    integritySnapshot = computeIntegritySnapshot(doc as unknown as EvidenceDocument);
+    const docData = { ...doc };
+    docData["createdAt"] = deserializeFirestoreDate(docData["createdAt"], "createdAt");
+    integritySnapshot = computeIntegritySnapshot(docData as unknown as EvidenceDocument);
   } catch { /* non-fatal */ }
 
   const entry: ChainOfCustodyEntry = {
