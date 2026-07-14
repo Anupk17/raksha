@@ -30,6 +30,7 @@ import {
 } from "./functions/generateLegalExport.js";
 import { createCloudTasksClient } from "./cloudTasks/createCloudTasksClient.js";
 import { createCreateSOSSessionHandler } from "./functions/createSOSSession.js";
+import { createActivateSOSSessionHandler } from "./functions/activateSOSSession.js";
 import type { CreateSOSSessionPayload } from "./types/sosSession.js";
 
 // Initialize Firebase Admin exactly once
@@ -181,4 +182,10 @@ export const createSOSSession = functions.https.onCall(
   async (data: CreateSOSSessionPayload, context) => {
     return createSOSSessionHandler(data, context);
   }
+);
+
+// activateSOSSession — Cloud Tasks HTTP handler (NOT callable; invoked by Cloud Tasks only)
+// Cloud Tasks delivers an HTTP POST; the handler verifies X-CloudTasks-QueueName header.
+export const activateSOSSession = functions.https.onRequest(
+  createActivateSOSSessionHandler(getFirestore())
 );
