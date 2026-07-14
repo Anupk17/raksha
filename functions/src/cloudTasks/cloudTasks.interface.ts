@@ -27,14 +27,21 @@ export interface CloudTasksClient {
    *                      should be delivered. Must be in the future. Values in the
    *                      past or within 100ms of now are clamped to now + 100ms to
    *                      avoid immediate dispatch races.
+   * @param taskName    - Optional stable name for this task, relative to the queue
+   *                      (e.g. "activate-{sessionId}"). When provided, Cloud Tasks
+   *                      uses this as a deduplication key: re-enqueueing the same
+   *                      name within 4 hours returns ALREADY_EXISTS rather than
+   *                      creating a duplicate task. The caller should treat
+   *                      ALREADY_EXISTS as a success.
    *
    * @returns The Cloud Tasks task name (resource string) on success.
-   * @throws  On any transient or permanent enqueue failure.
+   * @throws  On any transient or permanent enqueue failure (NOT on ALREADY_EXISTS).
    */
   enqueueTask(
     queuePath: string,
     handlerUrl: string,
     payload: Record<string, unknown>,
-    scheduleMs: number
+    scheduleMs: number,
+    taskName?: string
   ): Promise<string>;
 }

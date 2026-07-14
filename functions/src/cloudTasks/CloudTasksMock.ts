@@ -36,7 +36,8 @@ export interface EnqueuedTask {
   enqueuedAt: number;
   /**
    * Synthesized task name returned to the caller.
-   * Format: "mock-task-{index}" — stable and predictable in tests.
+   * When a stable taskName was provided, this equals that name.
+   * Otherwise: "mock-task-{index}" — stable and predictable in tests.
    */
   taskName: string;
 }
@@ -49,12 +50,24 @@ export class CloudTasksMock implements CloudTasksClient {
     queuePath: string,
     handlerUrl: string,
     payload: Record<string, unknown>,
-    scheduleMs: number
+    scheduleMs: number,
+    taskName?: string
   ): Promise<string> {
     const enqueuedAt = Date.now();
     // Mirror the real implementation's minimum-100ms clamp
     const clampedScheduleMs = Math.max(scheduleMs, enqueuedAt + 100);
-    const taskName = `mock-task-${this.taskCounter++}`;
+
+    // If a stable taskName is provided, check for an existing task with that
+    // name. Return its recorded name without re-recording — mirrors Cloud Tasks
+    // ALREADY_EXISTS dedup behavior within the 4-hour window.
+    if (taskName) {
+      const existing = this.tasks.find((t) => t.taskName === taskName);
+      if (existing) {
+        return existing.taskName;
+      }
+    }
+
+    const resolvedName = taskName ?? `mock-task-${this.taskCounter++}`;
 
     this.tasks.push({
       queuePath,
@@ -62,10 +75,10 @@ export class CloudTasksMock implements CloudTasksClient {
       payload,
       scheduleMs: clampedScheduleMs,
       enqueuedAt,
-      taskName,
+      taskName: resolvedName,
     });
 
-    return taskName;
+    return resolvedName;
   }
 
   /** All tasks enqueued since this instance was created, in order. */

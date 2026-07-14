@@ -35,7 +35,8 @@ export class RealCloudTasksClient implements CloudTasksClient {
     queuePath: string,
     handlerUrl: string,
     payload: Record<string, unknown>,
-    scheduleMs: number
+    scheduleMs: number,
+    taskName?: string
   ): Promise<string> {
     const now = Date.now();
     // Clamp to at least 100 ms in the future to avoid immediate-dispatch races.
@@ -46,24 +47,51 @@ export class RealCloudTasksClient implements CloudTasksClient {
 
     const body = Buffer.from(JSON.stringify(payload)).toString("base64");
 
-    const [response] = await this.client.createTask({
-      parent: queuePath,
-      task: {
-        scheduleTime: {
-          seconds: scheduleSeconds,
-        },
-        httpRequest: {
-          httpMethod: "POST" as const,
-          url: handlerUrl,
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body,
-        },
+    // Build the task descriptor. Include the stable name when provided so that
+    // Cloud Tasks can enforce deduplication: a second createTask call with the
+    // same name within a 4-hour window returns ALREADY_EXISTS instead of
+    // creating a duplicate task — giving us idempotent enqueue retries.
+    const taskDescriptor: Record<string, unknown> = {
+      scheduleTime: {
+        seconds: scheduleSeconds,
       },
-    });
+      httpRequest: {
+        httpMethod: "POST" as const,
+        url: handlerUrl,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body,
+      },
+    };
 
-    // response.name is the fully-qualified task resource name.
-    return response.name ?? "";
+    if (taskName) {
+      // Cloud Tasks task name format:
+      // {queuePath}/tasks/{taskName}
+      taskDescriptor["name"] = `${queuePath}/tasks/${taskName}`;
+    }
+
+    try {
+      const [response] = await this.client.createTask({
+        parent: queuePath,
+        task: taskDescriptor,
+      });
+      // response.name is the fully-qualified task resource name.
+      return response.name ?? "";
+    } catch (err: any) {
+      // Cloud Tasks returns a gRPC ALREADY_EXISTS (code 6) when a named task
+      // with the same name was already enqueued within the 4-hour dedup window.
+      // This is not an error — it means the task is already queued, which is
+      // exactly the outcome we want on an idempotent retry.
+      const isAlreadyExists =
+        err?.code === 6 || // gRPC ALREADY_EXISTS
+        (typeof err?.message === "string" && err.message.includes("ALREADY_EXISTS"));
+
+      if (isAlreadyExists && taskName) {
+        // Return the deterministic task name the caller already knows.
+        return `${queuePath}/tasks/${taskName}`;
+      }
+      throw err;
+    }
   }
 }

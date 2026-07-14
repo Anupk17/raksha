@@ -28,6 +28,9 @@ import {
   createGenerateLegalExportHandler,
   type GenerateLegalExportRequest,
 } from "./functions/generateLegalExport.js";
+import { createCloudTasksClient } from "./cloudTasks/createCloudTasksClient.js";
+import { createCreateSOSSessionHandler } from "./functions/createSOSSession.js";
+import type { CreateSOSSessionPayload } from "./types/sosSession.js";
 
 // Initialize Firebase Admin exactly once
 if (getApps().length === 0) {
@@ -37,6 +40,11 @@ if (getApps().length === 0) {
 // Module-level KMS client singleton
 const kms = createKMSClient();
 const keyRingRef = process.env.KMS_KEY_RING_REF ?? "";
+
+// Module-level Cloud Tasks client
+const cloudTasksClient = createCloudTasksClient();
+const queuePath = process.env.ACTIVATION_QUEUE_PATH ?? "";
+const handlerUrl = process.env.ACTIVATION_HANDLER_URL ?? "";
 
 // Export onEvidenceCreate trigger
 export const onEvidenceCreate = onEvidenceCreateTrigger;
@@ -158,5 +166,19 @@ const generateLegalExportHandler = createGenerateLegalExportHandler(
 export const generateLegalExport = functions.https.onCall(
   async (data: GenerateLegalExportRequest, context) => {
     return generateLegalExportHandler(data, context);
+  }
+);
+
+// createSOSSession
+const createSOSSessionHandler = createCreateSOSSessionHandler(
+  getFirestore(),
+  cloudTasksClient,
+  queuePath,
+  handlerUrl
+);
+
+export const createSOSSession = functions.https.onCall(
+  async (data: CreateSOSSessionPayload, context) => {
+    return createSOSSessionHandler(data, context);
   }
 );
