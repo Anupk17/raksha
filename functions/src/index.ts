@@ -32,6 +32,7 @@ import { createCloudTasksClient } from "./cloudTasks/createCloudTasksClient.js";
 import { createCreateSOSSessionHandler } from "./functions/createSOSSession.js";
 import { createActivateSOSSessionHandler } from "./functions/activateSOSSession.js";
 import { createCancelSOSSessionHandler } from "./functions/cancelSOSSession.js";
+import { createTestTriggerHandler } from "./functions/testTrigger.js";
 import type { CreateSOSSessionPayload } from "./types/sosSession.js";
 
 // Initialize Firebase Admin exactly once
@@ -195,6 +196,14 @@ export const activateSOSSession = functions.https.onRequest(
 export const cancelSOSSession = functions.https.onCall(
   async (data: { sessionId: string }, context) => {
     const handler = createCancelSOSSessionHandler(getFirestore());
+    return handler(data, context);
+  }
+);
+
+// testTrigger — HTTPS callable Cloud Function.
+export const testTrigger = functions.https.onCall(
+  async (data: CreateSOSSessionPayload, context) => {
+    const handler = createTestTriggerHandler();
     return handler(data, context);
   }
 );
