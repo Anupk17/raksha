@@ -106,3 +106,143 @@ export function assertDateOrNull(
   }
   return deserializeFirestoreDate(value, fieldName);
 }
+
+// ---------------------------------------------------------------------------
+// ISO 8601 string → Date  (callable payload boundary)
+// ---------------------------------------------------------------------------
+
+/**
+ * Strictly parses an ISO 8601 string from a callable payload into a native
+ * Date, throwing loudly on any malformed input.
+ *
+ * WHY THIS EXISTS — the problem with bare new Date(isoString):
+ *
+ *   JavaScript's Date constructor is extremely lenient.  It silently accepts:
+ *     - "2025-6-1"         (non-padded month/day)
+ *     - "June 1 2025"      (locale string)
+ *     - "1717257600000"    (numeric string — parses as NaN in some engines,
+ *                           as a large year in others)
+ *     - ""                 (epoch in some engines, Invalid Date in others)
+ *
+ *   All of these either produce a wrong-but-valid Date or an Invalid Date.
+ *   assertDate() only validates the Date *output* — it cannot distinguish a
+ *   correctly-parsed ISO date from a Date built from a garbage input that
+ *   happened to not be NaN.
+ *
+ *   The attack surface is the callable payload: a client (or attacker) may
+ *   send triggeredAt / syncedAt values that are not ISO 8601.  A bare
+ *   new Date(payload.triggeredAt) will silently accept them and produce a
+ *   Date that passes assertDate but carries the wrong value.
+ *
+ * WHAT THIS FUNCTION DOES:
+ *   1. Rejects non-string inputs immediately.
+ *   2. Validates the string against a strict ISO 8601 regex (both date-only
+ *      and datetime-with-offset forms) before calling new Date().
+ *   3. Runs assertDate() on the result — belt-and-suspenders against any
+ *      edge case the regex admits but Date rejects.
+ *   4. Throws PayloadTimestampError (a subclass of TimestampDeserializationError)
+ *      with the field name, rejected value, and reason.
+ *
+ * USAGE in createSOSSession and any other callable that receives timestamps:
+ *
+ *   const triggeredAt = parseISODate(data.triggeredAt, 'triggeredAt');
+ *   const syncedAt    = parseISODate(data.syncedAt,    'syncedAt');
+ *
+ * These are the ONLY safe entry points.  Do NOT use new Date() on payload
+ * strings anywhere in the silent-activation code path.
+ *
+ * Design: RAKSHA Technical Design — Discreet Silent Activation §createSOSSession
+ * Requirements: tasks.md Task 2.2, Task 2.3
+ */
+
+/**
+ * Thrown when a callable payload timestamp string fails ISO 8601 validation.
+ * Distinct from TimestampDeserializationError (which covers Firestore reads)
+ * so callers can catch the two failure modes separately if needed.
+ */
+export class PayloadTimestampError extends Error {
+  constructor(
+    public readonly fieldName: string,
+    public readonly rejectedValue: unknown,
+    public readonly reason: string
+  ) {
+    super(
+      `parseISODate: field '${fieldName}' is not a valid ISO 8601 timestamp. ` +
+        `Reason: ${reason}. ` +
+        `Received: ${JSON.stringify(rejectedValue)}`
+    );
+    this.name = "PayloadTimestampError";
+  }
+}
+
+/**
+ * Strict ISO 8601 regex.
+ *
+ * Accepts:
+ *   - Full datetime with UTC offset: 2025-06-01T12:00:00Z
+ *   - Full datetime with numeric offset: 2025-06-01T12:00:00+05:30
+ *   - Full datetime with milliseconds: 2025-06-01T12:00:00.123Z
+ *   - Date-only: 2025-06-01  (parsed as midnight UTC)
+ *
+ * Rejects:
+ *   - Locale strings ("June 1 2025")
+ *   - Non-padded month/day ("2025-6-1")
+ *   - Numeric strings ("1717257600000")
+ *   - Empty strings
+ *   - Partial times without seconds ("2025-06-01T12:00")
+ *
+ * Note: this regex validates structure, not calendar correctness
+ * (e.g. month=13 passes the regex but produces Invalid Date — assertDate
+ * catches that via the isNaN check).
+ */
+const ISO_8601_RE =
+  /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d))?$/;
+
+/**
+ * Parses a strict ISO 8601 string from a callable payload into a native Date.
+ *
+ * @param value     - The raw value from the callable payload field.
+ * @param fieldName - Human-readable field path for error messages.
+ * @returns A validated native Date.
+ * @throws PayloadTimestampError if the input is not a string or fails the ISO regex.
+ * @throws TimestampDeserializationError if the parsed Date is Invalid (belt-and-suspenders).
+ */
+export function parseISODate(value: unknown, fieldName: string): Date {
+  if (typeof value !== "string") {
+    throw new PayloadTimestampError(
+      fieldName,
+      value,
+      `expected a string, got ${value === null ? "null" : typeof value}`
+    );
+  }
+  if (!ISO_8601_RE.test(value)) {
+    throw new PayloadTimestampError(
+      fieldName,
+      value,
+      "does not match strict ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD)"
+    );
+  }
+  
+  // Extract date components directly via slices (safe because regex guaranteed the format)
+  const year = parseInt(value.slice(0, 4), 10);
+  const month = parseInt(value.slice(5, 7), 10) - 1; // 0-based month
+  const day = parseInt(value.slice(8, 10), 10);
+  
+  // Verify calendar validity by checking if Date.UTC rolls over the values
+  const temp = new Date(Date.UTC(year, month, day));
+  if (
+    temp.getUTCFullYear() !== year ||
+    temp.getUTCMonth() !== month ||
+    temp.getUTCDate() !== day
+  ) {
+    throw new PayloadTimestampError(
+      fieldName,
+      value,
+      "calendar-impossible date (e.g. February 30)"
+    );
+  }
+
+  const d = new Date(value);
+  return assertDate(d, fieldName);
+}
+
