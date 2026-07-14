@@ -165,7 +165,10 @@ async function generatePdf(
   logger: PipelineLogger
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument();
+    // pdfVersion:"1.3" + compress:false is required for pdf-parse (pdf.js) text extraction.
+    // PDF 1.3 uses a traditional flat XRef table; versions 1.4+ with compressed XRef streams
+    // cause "bad XRef entry" / "Illegal character" errors in pdf.js.
+    const doc = new PDFDocument({ pdfVersion: "1.3", compress: false });
     const chunks: Buffer[] = [];
 
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
