@@ -31,6 +31,7 @@ import {
 import { createCloudTasksClient } from "./cloudTasks/createCloudTasksClient.js";
 import { createCreateSOSSessionHandler } from "./functions/createSOSSession.js";
 import { createActivateSOSSessionHandler } from "./functions/activateSOSSession.js";
+import { createCancelSOSSessionHandler } from "./functions/cancelSOSSession.js";
 import type { CreateSOSSessionPayload } from "./types/sosSession.js";
 
 // Initialize Firebase Admin exactly once
@@ -188,4 +189,12 @@ export const createSOSSession = functions.https.onCall(
 // Cloud Tasks delivers an HTTP POST; the handler verifies X-CloudTasks-QueueName header.
 export const activateSOSSession = functions.https.onRequest(
   createActivateSOSSessionHandler(getFirestore())
+);
+
+// cancelSOSSession — HTTPS callable Cloud Function.
+export const cancelSOSSession = functions.https.onCall(
+  async (data: { sessionId: string }, context) => {
+    const handler = createCancelSOSSessionHandler(getFirestore());
+    return handler(data, context);
+  }
 );
