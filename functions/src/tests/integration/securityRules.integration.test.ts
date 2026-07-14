@@ -129,19 +129,19 @@ describe("Task 6: Firestore Security Rules integration tests", () => {
     const ownerUid = "owner-user";
     const strangerUid = "stranger-user";
 
-    it("allows the owner to read and write their own user document", async () => {
+    it("allows the owner to read and write their own user document with a valid bcrypt cost=10 hash", async () => {
       const testEnv = await getTestEnv();
       const ownerCtx = testEnv.authenticatedContext(ownerUid);
       const ownerDb = ownerCtx.firestore();
 
       const userDocRef = ownerDb.collection("users").doc(ownerUid);
 
-      // Write config
+      // Write config with a valid bcrypt cost=10 hash
       await expect(
         userDocRef.set({
           userId: ownerUid,
           silentActivationConfig: {
-            duressPinHash: "some-bcrypt-hash",
+            duressPinHash: "$2b$10$12345678901234567890123456789012345678901234567890123",
             configuredTapCount: 5,
           },
         })
@@ -151,6 +151,44 @@ describe("Task 6: Firestore Security Rules integration tests", () => {
       const snap = await userDocRef.get();
       expect(snap.exists).toBe(true);
       expect(snap.data()?.["userId"]).toBe(ownerUid);
+    });
+
+    it("denies the owner from writing a plaintext PIN to duressPinHash", async () => {
+      const testEnv = await getTestEnv();
+      const ownerCtx = testEnv.authenticatedContext(ownerUid);
+      const ownerDb = ownerCtx.firestore();
+
+      const userDocRef = ownerDb.collection("users").doc(ownerUid);
+
+      // Try write with plaintext PIN
+      await expect(
+        userDocRef.set({
+          userId: ownerUid,
+          silentActivationConfig: {
+            duressPinHash: "123456", // plaintext
+            configuredTapCount: 5,
+          },
+        })
+      ).rejects.toThrow(/PERMISSION_DENIED|permission-denied|evaluation error|false for/i);
+    });
+
+    it("denies the owner from writing a bcrypt hash with cost=8", async () => {
+      const testEnv = await getTestEnv();
+      const ownerCtx = testEnv.authenticatedContext(ownerUid);
+      const ownerDb = ownerCtx.firestore();
+
+      const userDocRef = ownerDb.collection("users").doc(ownerUid);
+
+      // Try write with cost=8 bcrypt hash
+      await expect(
+        userDocRef.set({
+          userId: ownerUid,
+          silentActivationConfig: {
+            duressPinHash: "$2b$08$12345678901234567890123456789012345678901234567890123", // cost=8
+            configuredTapCount: 5,
+          },
+        })
+      ).rejects.toThrow(/PERMISSION_DENIED|permission-denied|evaluation error|false for/i);
     });
 
     it("denies a non-owner from reading or writing another user's document", async () => {
