@@ -88,8 +88,6 @@ async function measurePinLatency(
       const t0 = performance.now();
 
       // Trigger pin submission via the test harness exposed by the PWA
-      // (The PWA must expose window.__testHarness.submitPin() when built
-      // with VITE_TEST_HARNESS=true or equivalent build flag)
       const harness = (window as any).__testHarness;
       if (!harness || typeof harness.submitPin !== "function") {
         throw new Error(
@@ -101,8 +99,6 @@ async function measurePinLatency(
       harness.submitPin(candidatePin);
 
       // Wait for the first rAF after the render call fires
-      // The PWA's renderWrongPinError() / renderDecoyScreen() must call
-      // window.__testHarness.notifyRendered() as their last synchronous act.
       const originalNotify = harness.notifyRendered;
       harness.notifyRendered = () => {
         requestAnimationFrame(() => {
@@ -141,7 +137,6 @@ test(
     }
 
     // Collect duress-PIN latency samples
-    // The duress PIN for the test harness is configured via RAKSHA_TEST_DURESS_PIN
     const testDuressPin = process.env["RAKSHA_TEST_DURESS_PIN"] ?? "111111";
     const duressPinLatencies: number[] = [];
     for (let i = 0; i < SAMPLE_COUNT; i++) {
