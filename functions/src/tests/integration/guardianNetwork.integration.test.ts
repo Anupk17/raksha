@@ -180,7 +180,7 @@ describe("Hyperlocal Guardian Network Integration Tests", () => {
   // =========================================================================
   // Test 3: Resumable Dispatch
   // =========================================================================
-  it("absorbs duplicate ping attempts idempotently if trigger is re-run", async () => {
+  it("absorbs duplicate ping attempts idempotently under concurrent execution", async () => {
     const db = getAdminFirestore();
 
     await db.collection("guardians").doc(GUARDIAN_1).set({
@@ -213,10 +213,24 @@ describe("Hyperlocal Guardian Network Integration Tests", () => {
 
     const change = makeChangeMock(beforeSnap, afterSnap);
 
-    // Run 1
-    await runOnSOSSessionUpdate(change, db);
-    // Run 2
-    await runOnSOSSessionUpdate(change, db);
+    // CONCURRENCY & ATOMICITY ANALYSIS (analogous to P18)
+    //
+    // Since JavaScript runs in a single-threaded event loop, true OS-level or
+    // multi-core concurrency cannot be strictly simulated inside a single Node process's
+    // Vitest execution context. The test uses `Promise.all` to launch the trigger invocations
+    // in parallel, which interleaves their asynchronous operations (network requests/Firestore I/O)
+    // and sends them simultaneously to the Firestore Emulator.
+    //
+    // The core safety guarantee that prevents duplicate pings under concurrent execution
+    // is Firestore's server-side atomic `create()` operation contract. Because we use
+    // `create()` instead of `set()`, the Firestore service ensures that if multiple calls
+    // race to write the same document, exactly one succeeds and all concurrent and subsequent
+    // calls are rejected with an ALREADY_EXISTS error. The function absorbs this error to
+    // maintain resumability.
+    await Promise.all([
+      runOnSOSSessionUpdate(change, db),
+      runOnSOSSessionUpdate(change, db),
+    ]);
 
     const pingDoc = await db.collection("guardian_pings").doc(`${sessionId}_${GUARDIAN_1}`).get();
     expect(pingDoc.exists).toBe(true);

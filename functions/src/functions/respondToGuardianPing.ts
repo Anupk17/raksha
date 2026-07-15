@@ -74,7 +74,17 @@ export async function runRespondToGuardianPing(
       });
     }
 
-    // Idempotency: if already responded, return success immediately
+    // Per-guardian-ping idempotency gate — NOT a session-level lock.
+    //
+    // Each guardian has their own independent ping document keyed by
+    // `${sessionId}_${guardianId}`. This check prevents a single guardian
+    // from recording their response twice, but it has NO effect on other
+    // guardians' ping documents for the same session.
+    //
+    // Multiple guardians simultaneously holding `response: 'accepted'` for
+    // the same SOSSession is intentional per the masterplan's convergence
+    // model — RAKSHA encourages multiple nearby responders to converge on
+    // the victim's location. Treating this as a bug would be incorrect.
     if (pingData.respondedAt !== null) {
       alreadyResponded = true;
       return;
