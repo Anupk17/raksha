@@ -34,6 +34,8 @@ import { createActivateSOSSessionHandler } from "./functions/activateSOSSession.
 import { createCancelSOSSessionHandler } from "./functions/cancelSOSSession.js";
 import { createTestTriggerHandler } from "./functions/testTrigger.js";
 import type { CreateSOSSessionPayload } from "./types/sosSession.js";
+import { runOnSOSSessionUpdate } from "./functions/onSOSSessionUpdate.js";
+import { createRespondToGuardianPingHandler } from "./functions/respondToGuardianPing.js";
 
 // Initialize Firebase Admin exactly once
 if (getApps().length === 0) {
@@ -206,4 +208,16 @@ export const testTrigger = functions.https.onCall(
     const handler = createTestTriggerHandler();
     return handler(data, context);
   }
+);
+
+// onSOSSessionUpdate — Firestore database trigger.
+export const onSOSSessionUpdate = functions.firestore
+  .document("sosSessions/{sessionId}")
+  .onUpdate(async (change, context) => {
+    return runOnSOSSessionUpdate(change, getFirestore());
+  });
+
+// respondToGuardianPing — HTTPS callable Cloud Function.
+export const respondToGuardianPing = functions.https.onCall(
+  createRespondToGuardianPingHandler(getFirestore())
 );

@@ -69,6 +69,28 @@ service cloud.firestore {
     }
 
     // -----------------------------------------------------------------------
+    // /guardians/{guardianId}
+    //
+    // Write: only the authenticated owner can write/update their onDuty status or currentLocation.
+    // Read: only the authenticated owner can read their profile. Other clients are blocked
+    //       from reading guardian details or currentLocations.
+    // -----------------------------------------------------------------------
+    match /guardians/{guardianId} {
+      allow read, write: if request.auth != null && request.auth.uid == guardianId;
+    }
+
+    // -----------------------------------------------------------------------
+    // /guardian_pings/{pingId}
+    //
+    // Read: only the specific guardian assigned to the ping can read it.
+    // Write: client writes are denied entirely.
+    // -----------------------------------------------------------------------
+    match /guardian_pings/{pingId} {
+      allow read: if request.auth != null && resource.data.guardianId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
     // /users/{userId}
     //
     // Permits owner read/write of their user document, which will contain

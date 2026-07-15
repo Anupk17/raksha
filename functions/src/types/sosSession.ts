@@ -15,6 +15,9 @@
  * Requirements: design.md §Data Model, tasks.md Task 1
  */
 
+import { parseISODate } from "../utils/assertDate.js";
+import type { FirestoreGeoPoint } from "./guardian.js";
+
 // ---------------------------------------------------------------------------
 // Trigger types
 // ---------------------------------------------------------------------------
@@ -96,6 +99,8 @@ export interface HashedLocation {
   latHash: string;
   /** SHA-256 of longitude truncated to 3 decimal places. */
   lngHash: string;
+  /** Optional unhashed raw coordinates for proximity matching during active emergency. */
+  current?: FirestoreGeoPoint;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +187,12 @@ export interface SOSSession {
    * Used to flag late-sync sessions in the audit log and downstream features.
    */
   lateSyncFlag: boolean;
+
+  /** UIDs of the guardians who were pinged for this SOS session. */
+  guardiansPinged?: string[];
+
+  /** IDs of the priority/trusted contacts notified as a fallback. */
+  contactsNotified?: string[];
 }
 
 // ---------------------------------------------------------------------------
