@@ -1,0 +1,24 @@
+{
+  "name": "raksha-client",
+  "version": "1.0.0",
+  "description": "RAKSHA — client-side modules",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^28.0.3",
+    "fake-indexeddb": "^6.0.0",
+    "fast-check": "^4.9.0",
+    "jsdom": "^29.1.1",
+    "typescript": "5.4.5",
+    "vitest": "1.6.0"
+  },
+  "dependencies": {
+    "@ricky0123/vad-web": "0.0.18",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
+    "sherpa-onnx": "1.10.2"
+  }
+}

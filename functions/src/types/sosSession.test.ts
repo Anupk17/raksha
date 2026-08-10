@@ -44,6 +44,7 @@ const VALID_STATUSES: SOSSessionStatus[] = [
 const VALID_TRIGGER_TYPES: TriggerType[] = [
   "power_button",
   "earbud",
+  "shake",
   "duress_phrase",
   "duress_pin",
 ];
@@ -112,10 +113,11 @@ describe("SOSSessionStatus union", () => {
 // ---------------------------------------------------------------------------
 
 describe("TriggerType union", () => {
-  it("contains exactly 4 values: power_button, earbud, duress_phrase, duress_pin", () => {
-    expect(VALID_TRIGGER_TYPES).toHaveLength(4);
+  it("contains exactly 5 values: power_button, earbud, shake, duress_phrase, duress_pin", () => {
+    expect(VALID_TRIGGER_TYPES).toHaveLength(5);
     expect(VALID_TRIGGER_TYPES).toContain("power_button");
     expect(VALID_TRIGGER_TYPES).toContain("earbud");
+    expect(VALID_TRIGGER_TYPES).toContain("shake");
     expect(VALID_TRIGGER_TYPES).toContain("duress_phrase");
     expect(VALID_TRIGGER_TYPES).toContain("duress_pin");
   });

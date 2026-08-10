@@ -2,22 +2,22 @@
  * onEvidenceCreate — Firestore onCreate trigger.
  *
  * Fires when a new document is created in /evidence/{evidenceId}.
- * Delegates all logic to runEvidenceCreatePipeline() so the pipeline
- * can be unit-tested and re-used by retriggerProcessing independently.
+ * Delegates all logic to runEvidenceCreatePipeline().
  *
- * The KMSClient is created at module initialization (not per-invocation)
- * so that KMSMock's in-memory key store persists across the lifecycle of
- * a single function execution — required for generateDataEncryptionKey +
- * decryptDataEncryptionKey to work on the same instance.
+ * kms and bucket are injected from index.ts so that the same KMSMock
+ * singleton is shared across onEvidenceCreate, serveEvidenceFile, and
+ * generateLegalExport. In the emulator, KMSMock stores DEKs in-memory —
+ * if each function creates its own instance, decryption in a later function
+ * call will always fail with "unknown encryptedDEK".
  *
  * Requirements: 3, 4, 5, 8, 10, 11
  * Design: §onEvidenceCreate Cloud Function Pipeline
  */
 import * as functions from "firebase-functions";
 import { getFirestore } from "firebase-admin/firestore";
-import { getStorage } from "firebase-admin/storage";
+import { getStorage, type Storage } from "firebase-admin/storage";
 import { initializeApp, getApps } from "firebase-admin/app";
-import { createKMSClient } from "../../kms/createKMSClient.js";
+import type { KMSClient } from "../../kms/kms.interface.js";
 import { runEvidenceCreatePipeline } from "./pipeline.js";
 
 // Ensure Firebase Admin is initialized exactly once.
@@ -25,22 +25,25 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
-// KMS client is a module-level singleton — createKMSClient() returns
-// KMSMock in test/emulator environments (NODE_ENV=test or FUNCTIONS_EMULATOR=true).
-const kms = createKMSClient();
+type Bucket = ReturnType<ReturnType<typeof getStorage>["bucket"]>;
 
-export const onEvidenceCreate = functions.firestore
-  .document("evidence/{evidenceId}")
-  .onCreate(async (snapshot, context) => {
-    const evidenceId = context.params["evidenceId"] as string;
-    const db = getFirestore();
-    const bucket = getStorage().bucket();
+/**
+ * Factory — call once from index.ts, passing the shared kms singleton
+ * and the correct bucket instance so the KMSMock store is shared.
+ */
+export function createOnEvidenceCreate(kms: KMSClient, bucket: Bucket) {
+  return functions.firestore
+    .document("evidence/{evidenceId}")
+    .onCreate(async (snapshot, context) => {
+      const evidenceId = context.params["evidenceId"] as string;
+      const db = getFirestore();
 
-    await runEvidenceCreatePipeline(
-      evidenceId,
-      db,
-      bucket,
-      kms,
-      functions.logger
-    );
-  });
+      await runEvidenceCreatePipeline(
+        evidenceId,
+        db,
+        bucket,
+        kms,
+        functions.logger
+      );
+    });
+}

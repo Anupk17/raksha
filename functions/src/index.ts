@@ -12,7 +12,7 @@ import * as functions from "firebase-functions";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { initializeApp, getApps } from "firebase-admin/app";
-import { onEvidenceCreate as onEvidenceCreateTrigger } from "./functions/onEvidenceCreate/index.js";
+import { createOnEvidenceCreate } from "./functions/onEvidenceCreate/index.js";
 import { createKMSClient } from "./kms/createKMSClient.js";
 import { runReportUploadFailure } from "./functions/reportUploadFailure.js";
 import { runRetriggerProcessing } from "./functions/retriggerProcessing.js";
@@ -42,6 +42,18 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
+// Storage bucket — must match VITE_FIREBASE_STORAGE_BUCKET in the client config.
+// Operator-precedence note: parenthesise the ?? fallback explicitly.
+const storageBucketName =
+  process.env.FIREBASE_STORAGE_BUCKET
+  ?? (process.env.GCLOUD_PROJECT
+      ? `${process.env.GCLOUD_PROJECT}.firebasestorage.app`
+      : "raksha-2d407.firebasestorage.app");
+
+function getBucket() {
+  return getStorage().bucket(storageBucketName);
+}
+
 // Module-level KMS client singleton
 const kms = createKMSClient();
 const keyRingRef = process.env.KMS_KEY_RING_REF ?? "";
@@ -51,8 +63,10 @@ const cloudTasksClient = createCloudTasksClient();
 const queuePath = process.env.ACTIVATION_QUEUE_PATH ?? "";
 const handlerUrl = process.env.ACTIVATION_HANDLER_URL ?? "";
 
-// Export onEvidenceCreate trigger
-export const onEvidenceCreate = onEvidenceCreateTrigger;
+// Export onEvidenceCreate trigger — pass shared kms and bucket so
+// KMSMock's in-memory DEK store is the same instance used by
+// serveEvidenceFile and generateLegalExport.
+export const onEvidenceCreate = createOnEvidenceCreate(kms, getBucket());
 
 // reportUploadFailure
 export const reportUploadFailure = functions.https.onCall(
@@ -73,7 +87,7 @@ export const retriggerProcessing = functions.https.onCall(
       data.evidenceId,
       context.auth?.uid ?? "",
       getFirestore(),
-      getStorage().bucket(),
+      getBucket(),
       kms,
       functions.logger
     );
@@ -147,7 +161,7 @@ export const recordEvidenceViewed = functions.https.onCall(
 // serveEvidenceFile
 const serveEvidenceFileHandler = createServeEvidenceFileHandler(
   getFirestore(),
-  getStorage().bucket(),
+  getBucket(),
   kms,
   functions.logger,
   keyRingRef
@@ -162,7 +176,7 @@ export const serveEvidenceFile = functions.https.onCall(
 // generateLegalExport
 const generateLegalExportHandler = createGenerateLegalExportHandler(
   getFirestore(),
-  getStorage().bucket(),
+  getBucket(),
   kms,
   functions.logger,
   keyRingRef

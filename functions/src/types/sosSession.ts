@@ -23,11 +23,12 @@ import type { FirestoreGeoPoint } from "./guardian.js";
 // ---------------------------------------------------------------------------
 
 /**
- * The four permitted gesture trigger types.
+ * The permitted gesture trigger types.
  *
  * - power_button : Android-TWA only (native RakshaBridge; iOS scoped out of
  *                  Phase 1 — see design.md §Decision 1).
  * - earbud       : Media Session API 'previoustrack' (triple-click).
+ * - shake        : Accelerometer-based shake detection via Android Foreground Service.
  * - duress_phrase: On-device sherpa-onnx keyword spotter match.
  * - duress_pin   : bcrypt cost=10 duress-PIN match.
  *                  Minimum PIN length: 6 digits (raised from 4 after the
@@ -36,13 +37,15 @@ import type { FirestoreGeoPoint } from "./guardian.js";
 export type TriggerType =
   | "power_button"
   | "earbud"
+  | "shake"
   | "duress_phrase"
   | "duress_pin";
 
-/** All four permitted TriggerType values as a const array for runtime guards. */
+/** All permitted TriggerType values as a const array for runtime guards. */
 export const TRIGGER_TYPES: ReadonlyArray<TriggerType> = [
   "power_button",
   "earbud",
+  "shake",
   "duress_phrase",
   "duress_pin",
 ] as const;

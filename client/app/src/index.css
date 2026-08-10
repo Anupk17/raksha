@@ -1,0 +1,417 @@
+/* ============================================================
+   RAKSHA — Design System
+   Light theme. White/off-white backgrounds, dark text, flat
+   cards, minimal accent colours for meaning only.
+   ============================================================ */
+
+/* ---- Fonts ---- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ---- Tokens ---- */
+:root {
+  --bg:            #f5f5f7;
+  --surface:       #ffffff;
+  --surface-2:     #f9f9fb;
+  --surface-3:     #f0f0f4;
+  --border:        rgba(0,0,0,0.10);
+  --border-bright: rgba(0,0,0,0.18);
+
+  --accent-red:    #d32f2f;
+  --accent-red-l:  #ef5350;
+  --accent-red-d:  #b71c1c;
+  --accent-green:  #2e7d32;
+  --accent-green-l:#43a047;
+  --accent-amber:  #f57c00;
+  --accent-amber-l:#ffa726;
+  --accent-blue:   #1565c0;
+
+  --text:          #111111;
+  --text-muted:    #555566;
+  --text-dim:      #888899;
+
+  /* status chips */
+  --chip-green-bg: #e8f5e9;
+  --chip-green-fg: #1b5e20;
+  --chip-red-bg:   #ffebee;
+  --chip-red-fg:   #b71c1c;
+  --chip-amber-bg: #fff8e1;
+  --chip-amber-fg: #e65100;
+
+  --radius:        12px;
+  --radius-sm:     8px;
+  --radius-xs:     6px;
+  --radius-full:   9999px;
+
+  --shadow:        0 1px 4px rgba(0,0,0,0.08), 0 0 0 0.5px var(--border);
+  --shadow-lg:     0 4px 16px rgba(0,0,0,0.12);
+
+  --font:          'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:     ui-monospace, 'JetBrains Mono', monospace;
+
+  --transition:    0.15s ease;
+}
+
+/* ---- Reset ---- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.6;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { min-height: 100dvh; display: flex; flex-direction: column; }
+
+a { color: var(--accent-blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---- Layout ---- */
+.screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 1rem;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.screen-centered {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ---- Stack utilities ---- */
+.stack     { display: flex; flex-direction: column; gap: 1rem; }
+.stack-sm  { display: flex; flex-direction: column; gap: 0.5rem; }
+.row       { display: flex; align-items: center; gap: 0.5rem; }
+.row-between { display: flex; justify-content: space-between; align-items: center; }
+
+/* ---- Card ---- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 0.5px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 1.25rem 1rem;
+}
+
+/* ---- Nav ---- */
+.nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  margin-bottom: 1.5rem;
+}
+.nav-logo {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.nav-links { display: flex; align-items: center; gap: 0.75rem; }
+.nav-link {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.nav-link:hover { color: var(--text); text-decoration: none; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: opacity var(--transition), background var(--transition);
+  text-align: center;
+  line-height: 1.4;
+}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--text);
+  color: #fff;
+}
+.btn-primary:not(:disabled):hover { opacity: 0.85; }
+
+.btn-danger {
+  background: var(--accent-red);
+  color: #fff;
+}
+.btn-danger:not(:disabled):hover { opacity: 0.87; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 0.5px solid var(--border-bright);
+}
+.btn-ghost:not(:disabled):hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.btn-danger-ghost {
+  background: var(--chip-red-bg);
+  color: var(--accent-red);
+  border: 0.5px solid rgba(211,47,47,0.25);
+}
+.btn-danger-ghost:not(:disabled):hover { background: #ffcdd2; }
+
+.btn-sm {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+}
+
+/* ---- Inputs ---- */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.input-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+.input, .select-input {
+  width: 100%;
+  padding: 0.6875rem 0.875rem;
+  background: var(--surface-2);
+  border: 0.5px solid var(--border-bright);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.input:focus, .select-input:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(21,101,192,0.12);
+}
+.input::placeholder { color: var(--text-dim); }
+.input-error { border-color: var(--accent-red) !important; }
+
+/* select wrapper keeps custom chevron */
+.select-wrapper {
+  position: relative;
+}
+.select-wrapper::after {
+  content: '▾';
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* ---- Field error ---- */
+.field-error {
+  font-size: 0.8125rem;
+  color: var(--accent-red);
+  margin-top: 0.125rem;
+}
+
+/* ---- Toggle switch ---- */
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 0.5px solid var(--border);
+}
+.toggle-info { flex: 1; min-width: 0; }
+.toggle-label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.toggle-sublabel {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-top: 0.125rem;
+}
+.toggle-children { margin-top: 0.875rem; padding-top: 0.875rem; border-top: 0.5px solid var(--border); }
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: #ccc;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: var(--radius-full);
+  transition: transform var(--transition);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle input:checked + .toggle-track { background: var(--accent-green); }
+.toggle input:checked + .toggle-track::after { transform: translateX(18px); }
+
+/* ---- Banner ---- */
+.banner {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-xs);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 0.5px solid transparent;
+}
+.banner-error {
+  background: var(--chip-red-bg);
+  color: var(--accent-red-d);
+  border-color: rgba(211,47,47,0.2);
+}
+.banner-success {
+  background: var(--chip-green-bg);
+  color: var(--accent-green);
+  border-color: rgba(46,125,50,0.2);
+}
+.banner-warning {
+  background: var(--chip-amber-bg);
+  color: var(--accent-amber);
+  border-color: rgba(245,124,0,0.2);
+}
+
+/* ---- Chips ---- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.chip-green { background: var(--chip-green-bg); color: var(--chip-green-fg); }
+.chip-red   { background: var(--chip-red-bg);   color: var(--chip-red-fg); }
+.chip-amber { background: var(--chip-amber-bg); color: var(--chip-amber-fg); }
+
+/* ---- Modal ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 2rem 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--shadow-lg);
+  border: 0.5px solid var(--border);
+}
+
+/* ---- Skeleton ---- */
+.skeleton {
+  background: linear-gradient(90deg, #e8e8ec 25%, #f0f0f4 50%, #e8e8ec 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius-xs);
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---- Spinner ---- */
+.spinner {
+  width: 28px; height: 28px;
+  border: 2.5px solid var(--border-bright);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Divider ---- */
+.divider {
+  border: none;
+  border-top: 0.5px solid var(--border);
+  margin: 0.25rem 0;
+}
+
+/* ---- Text utilities ---- */
+.text-muted  { color: var(--text-muted); }
+.text-dim    { color: var(--text-dim); }
+.text-sm     { font-size: 0.875rem; }
+.text-xs     { font-size: 0.75rem; }
+.text-safe   { color: var(--accent-blue); }
+
+/* ---- SOS countdown ---- */
+.sos-ring-track { stroke: var(--surface-3); }
+.sos-ring-fill  { stroke: var(--accent-red); }
+
+/* ---- Ping card accent border ---- */
+.ping-card {
+  border-left: 3px solid var(--accent-red);
+}
+
+/* ---- Blue neon live pulse ---- */
+@keyframes neon-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px 2px rgba(0,198,255,0.7); }
+  50%       { opacity: 0.6; box-shadow: 0 0 12px 4px rgba(0,198,255,0.4); }
+}
+.neon-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #00c6ff;
+  animation: neon-pulse 1.8s ease-in-out infinite;
+}
+
+/* ---- Leaflet tile layer z-index fix inside card ---- */
+.leaflet-container { z-index: 0; }
+.leaflet-pane      { z-index: 1 !important; }
+.leaflet-tile-pane { z-index: 2 !important; }
+.leaflet-marker-pane { z-index: 6 !important; }

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RAKSHA launcher foreground — white shield with a white tick.
+  Safe zone: artwork stays within the central 72×72dp (18dp inset each side)
+  of the 108×108dp canvas so it looks correct when masked to circle/squircle.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!--
+      Shield outline:
+      Centred at (54, 54). Top edge at y=20, bottom point at y=88.
+      Left=26, Right=82. Shoulders curve inward from y=20 to y=44
+      then taper to the bottom point.
+    -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+          M54,20
+          C54,20 26,30 26,50
+          L26,62
+          C26,76 38,86 54,92
+          C70,86 82,76 82,62
+          L82,50
+          C82,30 54,20 54,20
+          Z"
+        android:strokeColor="#00000000"
+        android:strokeWidth="0" />
+
+    <!--
+      Tick / checkmark inside the shield — navy so it reads against white.
+      Points: start bottom-left of tick at (40,57), knee at (50,67), end top-right at (68,43)
+      Stroke width 6dp, round caps and joins.
+    -->
+    <path
+        android:strokeColor="#1A237E"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M40,57 L50,67 L68,43" />
+
+</vector>

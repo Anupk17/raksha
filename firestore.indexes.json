@@ -1,4 +1,22 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "guardian_pings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "guardianId", "order": "ASCENDING" },
+        { "fieldPath": "response",   "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "evidence",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "incidentId",          "order": "ASCENDING"  },
+        { "fieldPath": "userId",              "order": "ASCENDING"  },
+        { "fieldPath": "metadata.capturedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

@@ -31,10 +31,16 @@ service cloud.firestore {
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status == 'uploading';
 
+      // Allow read for: owner of existing doc, active granted contact,
+      // OR authenticated user checking for their own non-existent doc
+      // (needed for the idempotency check in the upload flow — getDoc on a
+      // missing document triggers this rule; resource is null for missing docs
+      // so resource.data checks fail without this additional condition).
       allow read: if request.auth != null
                   && (
-                    resource.data.userId == request.auth.uid
-                    || isActiveGrantedContact(request.auth.uid, resource.data.userId)
+                    (resource != null && resource.data.userId == request.auth.uid)
+                    || (resource != null && isActiveGrantedContact(request.auth.uid, resource.data.userId))
+                    || resource == null
                   );
 
       // No client update exceptions — fully write-once after creation.
@@ -63,9 +69,21 @@ service cloud.firestore {
     // Read: authenticated owner only.
     // -----------------------------------------------------------------------
     match /sosSessions/{sessionId} {
+      // Owner can always read their own session.
+      // Assigned guardians (those with a matching guardian_pings doc) can also read
+      // to fetch the victim's live location coordinates for the map.
       allow read: if request.auth != null
-                    && resource.data.userId == request.auth.uid;
-      allow write: if false;
+                    && (
+                      resource.data.userId == request.auth.uid
+                      || exists(/databases/$(database)/documents/guardian_pings/$(sessionId + '_' + request.auth.uid))
+                    );
+
+      // Owner may update their own session (used for live location streaming).
+      // All other writes (status transitions) go through Admin SDK — denied here.
+      allow update: if request.auth != null
+                      && resource.data.userId == request.auth.uid;
+
+      allow create, delete: if false;
     }
 
     // -----------------------------------------------------------------------

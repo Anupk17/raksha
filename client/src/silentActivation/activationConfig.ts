@@ -50,6 +50,17 @@ export interface SilentActivationConfig {
   /** Whether the earbud triple-click trigger is enabled. */
   earbudEnabled?: boolean;
 
+  /** Whether the shake trigger is enabled (Android Foreground Service + accelerometer). */
+  shakeEnabled?: boolean;
+  /**
+   * Shake detection sensitivity. Controls how hard the user must shake the phone.
+   *   1 = light  — 4 axis reversals at ≥7 m/s²  (responds to moderate shakes)
+   *   2 = medium — 6 axis reversals at ≥11 m/s² (default; ignores normal daily motion)
+   *   3 = strong — 8 axis reversals at ≥16 m/s² (requires hard, deliberate shaking)
+   * Defaults to 2 (medium) if not set.
+   */
+  shakeSensitivity?: 1 | 2 | 3;
+
   /** Whether the duress-PIN trigger is enabled. */
   duressPinEnabled?: boolean;
   /**
@@ -111,6 +122,7 @@ export function validateActivationConfig(
   const anyEnabled =
     config.powerButtonEnabled ||
     config.earbudEnabled ||
+    config.shakeEnabled ||
     config.duressPinEnabled ||
     config.duressPhraseEnabled;
 
@@ -133,6 +145,17 @@ export function validateActivationConfig(
       errors.push({
         field: "powerButtonTapCount",
         message: "Power-button tap count must be an integer between 3 and 7.",
+      });
+    }
+  }
+
+  // ----- Shake sensitivity -----
+  if (config.shakeEnabled) {
+    const s = config.shakeSensitivity;
+    if (s !== undefined && s !== 1 && s !== 2 && s !== 3) {
+      errors.push({
+        field: "shakeSensitivity",
+        message: "Shake sensitivity must be 1 (light), 2 (medium), or 3 (strong).",
       });
     }
   }
@@ -223,6 +246,8 @@ export async function saveActivationConfig(
     powerButtonEnabled: config.powerButtonEnabled,
     powerButtonTapCount: config.powerButtonTapCount,
     earbudEnabled: config.earbudEnabled,
+    shakeEnabled: config.shakeEnabled,
+    shakeSensitivity: config.shakeEnabled ? (config.shakeSensitivity ?? 2) : undefined,
     duressPinEnabled: config.duressPinEnabled,
     duressPhraseEnabled: config.duressPhraseEnabled,
     duressPhrase: config.duressPhrase,
@@ -231,6 +256,9 @@ export async function saveActivationConfig(
 
   // Hash duress PIN with bcrypt cost=10 (hardcoded)
   if (config.duressPinEnabled && config.duressPin) {
+    // bcrypt at cost=10 is CPU-intensive — yield to the event loop first
+    // so the UI doesn't appear frozen while hashing runs (especially on mobile)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const hash = await bcrypt.hash(config.duressPin, BCRYPT_COST);
     toPersist.duressPinHash = hash;
 

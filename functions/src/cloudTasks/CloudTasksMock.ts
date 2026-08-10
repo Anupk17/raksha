@@ -78,6 +78,33 @@ export class CloudTasksMock implements CloudTasksClient {
       taskName: resolvedName,
     });
 
+    if (process.env["FUNCTIONS_EMULATOR"] === "true") {
+      const delayMs = Math.max(0, clampedScheduleMs - enqueuedAt);
+      const projectId = process.env.GCLOUD_PROJECT || "raksha-2d407";
+      const targetUrl = handlerUrl || `http://127.0.0.1:5001/${projectId}/us-central1/activateSOSSession`;
+
+      setTimeout(() => {
+        fetch(targetUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-cloudtasks-queuename": "sos-session-activate",
+          },
+          body: JSON.stringify(payload),
+        })
+          .then((res) => {
+            if (!res.ok) {
+              console.error(`[CloudTasksMock] Emulator auto-execution failed: status ${res.status}`);
+            } else {
+              console.log(`[CloudTasksMock] Emulator auto-execution succeeded for sessionId: ${payload["sessionId"]}`);
+            }
+          })
+          .catch((err) => {
+            console.error("[CloudTasksMock] Emulator auto-execution error:", err);
+          });
+      }, delayMs);
+    }
+
     return resolvedName;
   }
 

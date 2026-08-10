@@ -53,7 +53,7 @@ const TINY_VALID_PNG = Buffer.from(
 //   byteOffset is 0, so pdf.js sees the correct data.
 // ---------------------------------------------------------------------------
 async function parsePdfText(buf: Buffer): Promise<string> {
-  const data = await pdfParse(new Uint8Array(buf));
+  const data = await pdfParse(Buffer.from(new Uint8Array(buf)));
   return data.text as string;
 }
 
