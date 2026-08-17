@@ -35,7 +35,7 @@ export function CountdownScreen() {
       ? new Date(rawTs)
       : new Date()
 
-  const { secondsLeft, status, sessionId, locationWarning, error, cancel, acceptedGuardianCount } =
+  const { secondsLeft, status, sessionId, locationWarning, error, cancel, acceptedGuardianCount, dispatchState } =
     useCountdown(triggeredAt, triggerType)
 
   // Auto-redirect after cancellation
@@ -84,7 +84,7 @@ export function CountdownScreen() {
           Your emergency contacts have been notified.
         </p>
 
-        {/* Live guardian response count — updates in real-time as guardians accept */}
+        {/* Guardian response status — updates in real time via onSnapshot */}
         {acceptedGuardianCount > 0 && (
           <div
             className="banner banner-info"
@@ -98,10 +98,38 @@ export function CountdownScreen() {
           </div>
         )}
 
-        {acceptedGuardianCount === 0 && (
+        {acceptedGuardianCount === 0 && dispatchState === 'searching' && (
           <p className="text-muted text-sm" style={{ maxWidth: '280px', lineHeight: 1.6 }}>
-            Alerting nearby guardians…
+            🔍 Alerting nearby guardians…
           </p>
+        )}
+
+        {acceptedGuardianCount === 0 && dispatchState === 'guardians_pinged' && (
+          <p className="text-muted text-sm" style={{ maxWidth: '280px', lineHeight: 1.6 }}>
+            🔔 Nearby guardians have been alerted. Awaiting response…
+          </p>
+        )}
+
+        {dispatchState === 'contacts_notified' && acceptedGuardianCount === 0 && (
+          <div
+            className="banner banner-warning"
+            role="status"
+            aria-live="polite"
+            style={{ maxWidth: '300px' }}
+          >
+            No guardians were nearby. Your emergency contacts have been notified instead.
+          </div>
+        )}
+
+        {dispatchState === 'no_response' && acceptedGuardianCount === 0 && (
+          <div
+            className="banner banner-warning"
+            role="status"
+            aria-live="polite"
+            style={{ maxWidth: '300px' }}
+          >
+            No guardians or emergency contacts could be reached. Call emergency services directly if you need help.
+          </div>
         )}
 
         {sessionId && (

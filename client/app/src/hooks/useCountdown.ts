@@ -44,6 +44,11 @@ interface CountdownState {
   locationWarning: boolean
   error: string | null
   acceptedGuardianCount: number   // live count of guardians who accepted
+  dispatchState: 'searching' | 'guardians_pinged' | 'contacts_notified' | 'no_response'
+  // searching        — onSOSSessionUpdate hasn't written guardiansPinged/contactsNotified yet
+  // guardians_pinged — at least one guardian was found and pinged
+  // contacts_notified — no guardians found, fell back to trusted contacts
+  // no_response      — onSOSSessionUpdate ran but found nobody to notify (no guardians, no contacts)
 }
 
 interface CreateSOSResult { sessionId: string; status: string }
@@ -56,6 +61,7 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
     locationWarning: false,
     error: null,
     acceptedGuardianCount: 0,
+    dispatchState: 'searching',
   })
 
   const rafRef       = useRef<number | null>(null)
@@ -173,16 +179,38 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
           if (!snap.exists()) return
           const data = snap.data()
           const serverStatus: string = data['status']
+
+          // Derive dispatch state from what onSOSSessionUpdate wrote.
+          // guardiansPinged is set when at least one guardian was found.
+          // contactsNotified is set when no guardians found, fell back to contacts.
+          // Neither set means the function either hasn't run yet or found nobody.
+          const guardiansPinged: unknown[] = data['guardiansPinged'] ?? []
+          const contactsNotified: unknown[] = data['contactsNotified'] ?? []
+          let dispatchState: CountdownState['dispatchState'] = 'searching'
+          if (guardiansPinged.length > 0) {
+            dispatchState = 'guardians_pinged'
+          } else if (contactsNotified.length > 0) {
+            dispatchState = 'contacts_notified'
+          } else if (serverStatus === 'active') {
+            // Session is active but nothing was written — onSOSSessionUpdate ran
+            // and found nobody (no guardians, no trusted contacts configured).
+            // Only set to no_response once we're active, not during countdown.
+            dispatchState = 'no_response'
+          }
+
           if (serverStatus === 'active') {
             stopTimer()
-            setState((s) => ({ ...s, status: 'active' }))
+            setState((s) => ({ ...s, status: 'active', dispatchState }))
           } else if (serverStatus === 'cancelled') {
             stopTimer()
-            setState((s) => ({ ...s, status: 'cancelled' }))
+            setState((s) => ({ ...s, status: 'cancelled', dispatchState }))
+          } else {
+            // Status unchanged — still update dispatchState in case onSOSSessionUpdate
+            // wrote guardiansPinged/contactsNotified before the status transition
+            setState((s) => ({ ...s, dispatchState }))
           }
         },
         (err) => {
-          // Permission errors after token expiry — surface as a banner, not a crash
           console.error('[useCountdown] onSnapshot error', err.code)
         },
       )
