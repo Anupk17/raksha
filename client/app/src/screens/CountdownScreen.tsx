@@ -35,7 +35,7 @@ export function CountdownScreen() {
       ? new Date(rawTs)
       : new Date()
 
-  const { secondsLeft, status, sessionId, locationWarning, error, cancel } =
+  const { secondsLeft, status, sessionId, locationWarning, error, cancel, acceptedGuardianCount } =
     useCountdown(triggeredAt, triggerType)
 
   // Auto-redirect after cancellation
@@ -83,6 +83,26 @@ export function CountdownScreen() {
           Help is on the way.<br />
           Your emergency contacts have been notified.
         </p>
+
+        {/* Live guardian response count — updates in real-time as guardians accept */}
+        {acceptedGuardianCount > 0 && (
+          <div
+            className="banner banner-info"
+            role="status"
+            aria-live="polite"
+            style={{ maxWidth: '300px', fontWeight: 600 }}
+          >
+            ✅ {acceptedGuardianCount === 1
+              ? '1 guardian is on their way to you'
+              : `${acceptedGuardianCount} guardians are on their way to you`}
+          </div>
+        )}
+
+        {acceptedGuardianCount === 0 && (
+          <p className="text-muted text-sm" style={{ maxWidth: '280px', lineHeight: 1.6 }}>
+            Alerting nearby guardians…
+          </p>
+        )}
 
         {sessionId && (
           <p className="text-muted text-xs">Session: {sessionId.slice(0, 8)}…</p>

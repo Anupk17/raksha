@@ -104,7 +104,13 @@ service cloud.firestore {
     // Write: client writes are denied entirely.
     // -----------------------------------------------------------------------
     match /guardian_pings/{pingId} {
+      // Assigned guardian can read their own ping
       allow read: if request.auth != null && resource.data.guardianId == request.auth.uid;
+      // Victim (SOS session owner) can read pings for their session — response count only,
+      // not guardian identity. The client only uses snap.size, never guardian UIDs.
+      allow read: if request.auth != null
+                  && exists(/databases/$(database)/documents/sosSessions/$(resource.data.sosSessionId))
+                  && get(/databases/$(database)/documents/sosSessions/$(resource.data.sosSessionId)).data.userId == request.auth.uid;
       allow write: if false;
     }
 

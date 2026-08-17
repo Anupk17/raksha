@@ -65,12 +65,34 @@ export function useGuardianPings(uid: string) {
           : true
 
         if (!guardianSnap.exists() && isGuardianEmail) {
+          // Seed with real GPS if available, fall back to Bengaluru only if denied
+          const seedLocation = await new Promise<{ latitude: number; longitude: number }>((resolve) => {
+            if (!navigator.geolocation) {
+              // Hardcoded to south Bengaluru — matches the OnePlus CPH2585 test device's
+              // consistent GPS fix. Update this if testing from a different location.
+              resolve({ latitude: 12.8649, longitude: 77.5470 })
+              return
+            }
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                console.log('[useGuardianPings] Seed GPS fix:', pos.coords.latitude, pos.coords.longitude, 'accuracy:', pos.coords.accuracy, 'm')
+                resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+              },
+              () => {
+                console.warn('[useGuardianPings] GPS denied — using hardcoded test coords')
+                resolve({ latitude: 12.8649, longitude: 77.5470 })
+              },
+              // enableHighAccuracy forces GPS chip, not WiFi; maximumAge:0 prevents
+              // stale cached WiFi fixes that are 14km off
+              { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
+            )
+          })
           await setDoc(doc(db, 'guardians', uid), {
             guardianId:         uid,
             verificationStatus: 'verified',
             onDuty:             true,
             responseStats:      { totalPings: 0, respondedCount: 0, avgResponseTimeSeconds: 0 },
-            currentLocation:    { latitude: 12.9716, longitude: 77.5946 },
+            currentLocation:    seedLocation,
             lastLocationUpdate: new Date(),
             verificationDocs:   [],
           })
@@ -80,6 +102,10 @@ export function useGuardianPings(uid: string) {
         ) {
           setState({ guardianStatus: 'not-registered', pings: [], loading: false, error: null, onDuty: false })
           return
+        } else if (guardianSnap.exists()) {
+          // Do NOT auto-refresh location on every mount — the PC browser's WiFi
+          // geolocation is inaccurate (14+ km off). Location is updated only when
+          // the user explicitly taps "Seed guardian at my location" in the dev banner.
         }
       } catch (err) {
         console.error('[useGuardianPings] Init check failed:', err)
@@ -122,31 +148,8 @@ export function useGuardianPings(uid: string) {
 
     void init()
 
-    // 3. Watch guardian's own location live to keep their profile current
-    let watchId: number | null = null
-    if (navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        async (pos) => {
-          const { latitude, longitude } = pos.coords
-          try {
-            await setDoc(doc(db, 'guardians', uid), {
-              currentLocation: { latitude, longitude },
-              lastLocationUpdate: new Date(),
-            }, { merge: true })
-          } catch (err) {
-            console.error('[useGuardianPings] Failed to update guardian location:', err)
-          }
-        },
-        (err) => console.error('[useGuardianPings] Guardian location watch error:', err),
-        { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
-      )
-    }
-
     return () => {
       unsub?.()
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId)
-      }
     }
   }, [uid])
 

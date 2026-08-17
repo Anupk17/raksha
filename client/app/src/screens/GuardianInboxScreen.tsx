@@ -31,6 +31,8 @@ export function GuardianInboxScreen() {
   const { guardianStatus, pings, loading, error, onDuty } = useGuardianPings(uid)
 
   // ── Dev-only: update guardian location to real device GPS ────────────────
+  // Uses high-accuracy GPS with a longer timeout to get a proper fix, not
+  // the browser's inaccurate WiFi-based location estimate.
   async function handleSeedLocation() {
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
@@ -43,13 +45,13 @@ export function GuardianInboxScreen() {
             },
             lastLocationUpdate: new Date(),
           }, { merge: true })
-          console.log('[GuardianInbox] Location seeded:', pos.coords.latitude, pos.coords.longitude)
+          console.log('[GuardianInbox] Location seeded:', pos.coords.latitude, pos.coords.longitude, 'accuracy:', pos.coords.accuracy, 'm')
         } catch (err) {
           console.error('[GuardianInbox] Failed to seed location:', err)
         }
       },
       (err) => console.error('[GuardianInbox] Geolocation error:', err),
-      { enableHighAccuracy: true, timeout: 10_000 },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 }, // maximumAge:0 forces fresh GPS, not cached WiFi fix
     )
   }
 
@@ -94,9 +96,8 @@ export function GuardianInboxScreen() {
       {IS_EMU && guardianStatus === 'verified' && (
         <div className="banner banner-warning" role="note" style={{ marginBottom: '1rem' }}>
           <p className="text-sm" style={{ marginBottom: '0.5rem' }}>
-            🔧 Dev: Guardian location is seeded to Bengaluru (12.97°N, 77.59°E).
-            SOS pings only appear if the victim's GPS is within 10 km of that
-            point. Tap below to update to your device's real location.
+            🔧 Dev: Guardian location seeds from GPS on first login. If pings aren't
+            appearing, tap below to force-reseed to your current location.
           </p>
           <button
             className="btn btn-ghost"

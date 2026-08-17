@@ -11,7 +11,7 @@
  * - onSnapshot listener torn down in cleanup
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore'
+import { doc, onSnapshot, updateDoc, collection, query, where } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, fns } from '../firebase'
 import { getCurrentHashedLocation } from './useGeolocation'
@@ -43,6 +43,7 @@ interface CountdownState {
   sessionId: string | null
   locationWarning: boolean
   error: string | null
+  acceptedGuardianCount: number   // live count of guardians who accepted
 }
 
 interface CreateSOSResult { sessionId: string; status: string }
@@ -54,11 +55,13 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
     sessionId: null,
     locationWarning: false,
     error: null,
+    acceptedGuardianCount: 0,
   })
 
-  const rafRef     = useRef<number | null>(null)
-  const unsubRef   = useRef<(() => void) | null>(null)
-  const sessionRef = useRef<string | null>(null)
+  const rafRef       = useRef<number | null>(null)
+  const unsubRef     = useRef<(() => void) | null>(null)
+  const unsubPingsRef = useRef<(() => void) | null>(null)
+  const sessionRef   = useRef<string | null>(null)
   const cancelledRef = useRef(false)
 
   // ── Stop the rAF timer loop ───────────────────────────────────────────────
@@ -183,6 +186,26 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
           console.error('[useCountdown] onSnapshot error', err.code)
         },
       )
+
+      // 5. Listen for guardian accepted responses — surfaces to victim in real time.
+      //    Query: guardian_pings where sosSessionId == sessionId AND response == 'accepted'
+      //    Privacy: we only expose the COUNT, not guardian names/UIDs.
+      const pingsQuery = query(
+        collection(db, 'guardian_pings'),
+        where('sosSessionId', '==', sessionId),
+        where('response', '==', 'accepted'),
+      )
+      unsubPingsRef.current = onSnapshot(
+        pingsQuery,
+        (snap) => {
+          setState((s) => ({ ...s, acceptedGuardianCount: snap.size }))
+        },
+        (err) => {
+          // Non-fatal — victim may not have read access to pings not assigned to them.
+          // Fail silently; the static "Help is on the way" message still shows.
+          console.warn('[useCountdown] guardian pings listener error:', err.code)
+        },
+      )
     }
 
     void init()
@@ -191,6 +214,7 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
       isMounted = false
       stopTimer()
       unsubRef.current?.()
+      unsubPingsRef.current?.()
       if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId)
       }
@@ -199,27 +223,37 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
 
   // ── Cancel function ───────────────────────────────────────────────────────
   const cancel = useCallback(async () => {
-    if (cancelledRef.current) return
-    cancelledRef.current = true
-    stopTimer()
-
+    // Don't gate on cancelledRef here — allow retries if first attempt failed
     const sid = sessionRef.current
     if (!sid) return
+
+    stopTimer()
 
     try {
       const cancelFn = httpsCallable(fns, 'cancelSOSSession', { timeout: 8000 })
       await cancelFn({ sessionId: sid })
+      cancelledRef.current = true
       setState((s) => ({ ...s, status: 'cancelled' }))
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? ''
+      const msg  = (err as { message?: string }).message ?? ''
+
       if (code === 'functions/deadline-exceeded' || code === 'functions/unavailable') {
-        // Emulator/network timeout — optimistically treat as cancelled
+        // Network/emulator timeout — treat as cancelled so user can leave screen
+        cancelledRef.current = true
         setState((s) => ({ ...s, status: 'cancelled' }))
-      } else if (code === 'functions/failed-precondition' || code === 'functions/not-found') {
-        // Already escalated
+      } else if (
+        code === 'functions/failed-precondition' ||
+        code === 'functions/not-found' ||
+        msg.includes('ALREADY_ESCALATED') ||
+        msg.includes('already escalated') ||
+        msg.includes('already active')
+      ) {
+        // Session already active — stay on active screen, cancel not possible
         setState((s) => ({ ...s, status: 'active' }))
       } else {
-        // Any other error including network — treat as cancelled for UX
+        // Any other error — optimistically navigate away so user isn't trapped
+        cancelledRef.current = true
         setState((s) => ({ ...s, status: 'cancelled' }))
       }
     }

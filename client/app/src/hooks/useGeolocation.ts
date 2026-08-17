@@ -34,8 +34,8 @@ async function sha256hex(input: string): Promise<string> {
 }
 
 /**
- * Requests the current position (5-second timeout, 60-second cached position
- * acceptable). Returns a HashedLocation on success, null on failure.
+ * Requests the current position with a longer timeout for cold GPS fixes
+ * on Capacitor/Android. Falls back gracefully on denial or timeout.
  */
 export async function getCurrentHashedLocation(): Promise<HashedLocation | null> {
   if (!navigator.geolocation) return null
@@ -51,11 +51,12 @@ export async function getCurrentHashedLocation(): Promise<HashedLocation | null>
           sha256hex(String(tLat)),
           sha256hex(String(tLng)),
         ])
-        // Raw coords placed in `current` only — ephemeral, not stored anywhere else
         resolve({ latHash, lngHash, current: { latitude: lat, longitude: lng } })
       },
-      () => resolve(null),            // denied / unavailable / timeout → null
-      { timeout: 5000, maximumAge: 60_000 },
+      () => resolve(null),
+      // 15s timeout — Capacitor cold GPS fix can take 8-12s on first use.
+      // maximumAge: 30s accepts a recent cached fix (avoids cold-start wait).
+      { timeout: 15_000, maximumAge: 30_000, enableHighAccuracy: true },
     )
   })
 }
