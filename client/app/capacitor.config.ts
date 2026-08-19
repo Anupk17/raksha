@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.raksha.app',
-  appName: 'RAKSHA',
+  appName: 'Daily Notes',
   webDir: 'dist'
 };
 

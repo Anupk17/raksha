@@ -67,14 +67,22 @@ export function LoginScreen() {
         (guardianSnap.exists() &&
         guardianSnap.data()['verificationStatus'] === 'verified')
 
-      let target = '/home'
-      if (isGuardian) {
-        target = '/guardian-inbox'
-      } else {
-        // Victims can respect original redirected path, but guardians must go to inbox
-        if (from && from !== '/' && from !== '/guardian-inbox') {
-          target = from
-        }
+      // Check if PIN lock is configured — if so, go to /pin first
+      const userSnap = await getDoc(doc(db, 'users', uid))
+      const cfg = userSnap.exists()
+        ? (userSnap.data()['silentActivationConfig'] as { pinLockEnabled?: boolean } | undefined)
+        : undefined
+      const pinLocked = !!cfg?.pinLockEnabled
+
+      let target = isGuardian ? '/guardian-inbox' : '/home'
+      if (!isGuardian && from && from !== '/' && from !== '/guardian-inbox') {
+        target = from
+      }
+
+      if (pinLocked) {
+        // Go to PIN screen first; it will redirect to target after unlock
+        navigate('/pin', { state: { from: { pathname: target } }, replace: true })
+        return
       }
 
       navigate(target, { replace: true })

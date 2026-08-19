@@ -43,12 +43,9 @@ interface CountdownState {
   sessionId: string | null
   locationWarning: boolean
   error: string | null
-  acceptedGuardianCount: number   // live count of guardians who accepted
+  acceptedGuardianCount: number
   dispatchState: 'searching' | 'guardians_pinged' | 'contacts_notified' | 'no_response'
-  // searching        — onSOSSessionUpdate hasn't written guardiansPinged/contactsNotified yet
-  // guardians_pinged — at least one guardian was found and pinged
-  // contacts_notified — no guardians found, fell back to trusted contacts
-  // no_response      — onSOSSessionUpdate ran but found nobody to notify (no guardians, no contacts)
+  cancelBlocked: boolean  // true when session is active and cannot be cancelled
 }
 
 interface CreateSOSResult { sessionId: string; status: string }
@@ -62,6 +59,7 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
     error: null,
     acceptedGuardianCount: 0,
     dispatchState: 'searching',
+    cancelBlocked: false,
   })
 
   const rafRef       = useRef<number | null>(null)
@@ -249,9 +247,7 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps — triggeredAt/triggerType arrive from stable navigation state
 
-  // ── Cancel function ───────────────────────────────────────────────────────
   const cancel = useCallback(async () => {
-    // Don't gate on cancelledRef here — allow retries if first attempt failed
     const sid = sessionRef.current
     if (!sid) return
 
@@ -261,15 +257,14 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
       const cancelFn = httpsCallable(fns, 'cancelSOSSession', { timeout: 8000 })
       await cancelFn({ sessionId: sid })
       cancelledRef.current = true
-      setState((s) => ({ ...s, status: 'cancelled' }))
+      setState((s) => ({ ...s, status: 'cancelled', cancelBlocked: false }))
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? ''
       const msg  = (err as { message?: string }).message ?? ''
 
       if (code === 'functions/deadline-exceeded' || code === 'functions/unavailable') {
-        // Network/emulator timeout — treat as cancelled so user can leave screen
         cancelledRef.current = true
-        setState((s) => ({ ...s, status: 'cancelled' }))
+        setState((s) => ({ ...s, status: 'cancelled', cancelBlocked: false }))
       } else if (
         code === 'functions/failed-precondition' ||
         code === 'functions/not-found' ||
@@ -277,12 +272,12 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
         msg.includes('already escalated') ||
         msg.includes('already active')
       ) {
-        // Session already active — stay on active screen, cancel not possible
-        setState((s) => ({ ...s, status: 'active' }))
+        // Session is active — cancel is not possible. Show clear message.
+        setState((s) => ({ ...s, status: 'active', cancelBlocked: true }))
       } else {
-        // Any other error — optimistically navigate away so user isn't trapped
+        // Any other error — navigate away so user is never trapped
         cancelledRef.current = true
-        setState((s) => ({ ...s, status: 'cancelled' }))
+        setState((s) => ({ ...s, status: 'cancelled', cancelBlocked: false }))
       }
     }
   }, [stopTimer])

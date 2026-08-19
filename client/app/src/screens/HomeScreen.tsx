@@ -26,7 +26,7 @@ function getPreferredTriggerType(config: SilentActivationConfig): TriggerType {
 }
 
 export function HomeScreen() {
-  const { user }  = useAuth()
+  const { user, lockApp }  = useAuth()
   const navigate  = useNavigate()
   const uid       = user!.uid
 
@@ -107,7 +107,7 @@ export function HomeScreen() {
           <button
             className="btn btn-ghost btn-sm"
             style={{ width: 'auto' }}
-            onClick={() => void signOut(auth)}
+            onClick={() => { lockApp(); void signOut(auth) }}
           >
             Sign out
           </button>

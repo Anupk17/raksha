@@ -25,7 +25,7 @@ import { PingCard } from '../components/PingCard'
 const IS_EMU = import.meta.env.VITE_USE_EMULATOR === 'true'
 
 export function GuardianInboxScreen() {
-  const { user } = useAuth()
+  const { user, lockApp } = useAuth()
   const uid = user!.uid
 
   const { guardianStatus, pings, loading, error, onDuty } = useGuardianPings(uid)
@@ -66,7 +66,7 @@ export function GuardianInboxScreen() {
           <button
             className="btn btn-ghost btn-sm"
             style={{ width: 'auto' }}
-            onClick={() => void signOut(auth)}
+            onClick={() => { lockApp(); void signOut(auth) }}
           >
             Sign out
           </button>

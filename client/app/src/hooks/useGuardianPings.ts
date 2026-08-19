@@ -113,11 +113,13 @@ export function useGuardianPings(uid: string) {
         return
       }
 
-      // 2. Open onSnapshot for pending pings
+      // 2. Open onSnapshot for pending AND accepted pings so accepted cards
+      //    remain visible until the victim cancels (Req: multiple guardians
+      //    can converge; card must not disappear after responding).
       const q = query(
         collection(db, 'guardian_pings'),
         where('guardianId', '==', uid),
-        where('response', '==', 'no_response'),
+        where('response', 'in', ['no_response', 'accepted']),
       )
 
       unsub = onSnapshot(

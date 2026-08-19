@@ -20,7 +20,6 @@ export function CountdownScreen() {
   const navigate  = useNavigate()
   const location  = useLocation()
 
-  // triggeredAt was captured in HomeScreen at button press (Section 6)
   const state = location.state as {
     triggeredAt?: Date | string
     triggerType?: 'power_button' | 'earbud' | 'shake' | 'duress_phrase' | 'duress_pin'
@@ -28,15 +27,16 @@ export function CountdownScreen() {
   const rawTs = state?.triggeredAt
   const triggerType = state?.triggerType ?? 'shake'
 
-  // location.state survives structured-clone as a Date (supported) or ISO string
   const triggeredAt: Date = rawTs instanceof Date
     ? rawTs
     : typeof rawTs === 'string'
       ? new Date(rawTs)
       : new Date()
 
-  const { secondsLeft, status, sessionId, locationWarning, error, cancel, acceptedGuardianCount, dispatchState } =
-    useCountdown(triggeredAt, triggerType)
+  const {
+    secondsLeft, status, sessionId, locationWarning,
+    error, cancel, acceptedGuardianCount, dispatchState, cancelBlocked,
+  } = useCountdown(triggeredAt, triggerType)
 
   // Auto-redirect after cancellation
   useEffect(() => {
@@ -79,19 +79,16 @@ export function CountdownScreen() {
       <div className="screen-centered" style={{ textAlign: 'center', gap: '1.5rem', padding: '2rem' }}>
         <div style={{ fontSize: '3rem', animation: 'pulse 1.5s ease-in-out infinite' }}>🚨</div>
         <h1 style={{ color: 'var(--accent-red-l)', fontSize: '1.6rem' }}>SOS Active</h1>
+
         <p style={{ color: 'var(--text)', lineHeight: 1.7, maxWidth: '300px' }}>
           Help is on the way.<br />
           Your emergency contacts have been notified.
         </p>
 
-        {/* Guardian response status — updates in real time via onSnapshot */}
+        {/* Guardian dispatch status — derived from sosSessions.guardiansPinged / contactsNotified */}
         {acceptedGuardianCount > 0 && (
-          <div
-            className="banner banner-info"
-            role="status"
-            aria-live="polite"
-            style={{ maxWidth: '300px', fontWeight: 600 }}
-          >
+          <div className="banner banner-info" role="status" aria-live="polite"
+            style={{ maxWidth: '300px', fontWeight: 600 }}>
             ✅ {acceptedGuardianCount === 1
               ? '1 guardian is on their way to you'
               : `${acceptedGuardianCount} guardians are on their way to you`}
@@ -111,24 +108,17 @@ export function CountdownScreen() {
         )}
 
         {dispatchState === 'contacts_notified' && acceptedGuardianCount === 0 && (
-          <div
-            className="banner banner-warning"
-            role="status"
-            aria-live="polite"
-            style={{ maxWidth: '300px' }}
-          >
+          <div className="banner banner-warning" role="status" aria-live="polite"
+            style={{ maxWidth: '300px' }}>
             No guardians were nearby. Your emergency contacts have been notified instead.
           </div>
         )}
 
         {dispatchState === 'no_response' && acceptedGuardianCount === 0 && (
-          <div
-            className="banner banner-warning"
-            role="status"
-            aria-live="polite"
-            style={{ maxWidth: '300px' }}
-          >
-            No guardians or emergency contacts could be reached. Call emergency services directly if you need help.
+          <div className="banner banner-warning" role="status" aria-live="polite"
+            style={{ maxWidth: '300px' }}>
+            No guardians or emergency contacts could be reached.
+            Call emergency services directly if you need help.
           </div>
         )}
 
@@ -136,16 +126,23 @@ export function CountdownScreen() {
           <p className="text-muted text-xs">Session: {sessionId.slice(0, 8)}…</p>
         )}
 
-        <button
-          id="late-cancel-btn"
-          className="btn btn-ghost"
-          style={{ maxWidth: '260px', marginTop: '0.5rem' }}
-          onClick={() => void cancel()}
-        >
-          I'm safe — cancel now
-        </button>
+        {/* Cancel — shows clear message if session is already active and cannot be cancelled */}
+        {cancelBlocked ? (
+          <div className="banner banner-warning" role="alert" style={{ maxWidth: '300px' }}>
+            Emergency response already dispatched — cancel is no longer possible.
+            Tap "Add evidence" or wait for help to arrive.
+          </div>
+        ) : (
+          <button
+            id="late-cancel-btn"
+            className="btn btn-ghost"
+            style={{ maxWidth: '260px', marginTop: '0.5rem' }}
+            onClick={() => void cancel()}
+          >
+            I'm safe — cancel now
+          </button>
+        )}
 
-        {/* Evidence capture link — sessionId doubles as incidentId for Evidence Trail */}
         {sessionId && (
           <Link
             to={`/evidence/capture?incidentId=${sessionId}`}
@@ -156,14 +153,17 @@ export function CountdownScreen() {
             📎 Add evidence to this incident
           </Link>
         )}
-        <p className="text-muted text-xs">
-          (Cancel may fail if emergency response has already been dispatched.)
-        </p>
+
+        {!cancelBlocked && (
+          <p className="text-muted text-xs">
+            (Cancel may fail if emergency response has already been dispatched.)
+          </p>
+        )}
 
         <style>{`
           @keyframes pulse {
             0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.15); }
+            50%       { transform: scale(1.15); }
           }
         `}</style>
       </div>
@@ -173,7 +173,6 @@ export function CountdownScreen() {
   // ── Pending / Countdown state ─────────────────────────────────────────────
   return (
     <div className="screen-centered" style={{ textAlign: 'center', gap: '1.5rem' }}>
-      {/* Countdown UI — web testing concession */}
       {status === 'pending' ? (
         <div className="spinner" role="status" aria-label="Starting SOS…" />
       ) : (

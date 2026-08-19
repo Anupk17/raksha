@@ -137,6 +137,14 @@ service cloud.firestore {
                              && request.resource.data.silentActivationConfig.duressPinHash.matches('^\\$2[abx]\\$10\\$[./A-Za-z0-9]{53}$')
                            )
                          )
+                         // normalPinHash must also be a valid bcrypt cost=10 hash if present
+                         && (
+                           !('normalPinHash' in request.resource.data.silentActivationConfig)
+                           || (
+                             request.resource.data.silentActivationConfig.normalPinHash is string
+                             && request.resource.data.silentActivationConfig.normalPinHash.matches('^\\$2[abx]\\$10\\$[./A-Za-z0-9]{53}$')
+                           )
+                         )
                        )
                      );
     }

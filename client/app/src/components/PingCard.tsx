@@ -107,7 +107,10 @@ function VictimMap({ victimLoc }: { victimLoc: VictimLocation }) {
 // ── PingCard ─────────────────────────────────────────────────────────────────
 export function PingCard({ ping }: Props) {
   const [responding,   setResponding]  = useState(false)
-  const [responded,    setResponded]   = useState(false)
+  // Pre-seed responded from Firestore — ping.response may already be 'accepted'
+  // if this guardian responded in a previous render cycle and the query now
+  // returns it with the updated response field.
+  const [responded,    setResponded]   = useState(ping.response === 'accepted')
   const [alreadyDone,  setAlreadyDone] = useState(false)
   const [error,        setError]       = useState<string | null>(null)
   const [victimLoc,    setVictimLoc]   = useState<VictimLocation | null>(null)
@@ -203,8 +206,70 @@ export function PingCard({ ping }: Props) {
 
   if (responded) {
     return (
-      <div className="card" style={{ opacity: 0.65 }}>
-        <span className="chip chip-green">✓ Response sent — Thank you</span>
+      <div className="card" style={{ borderLeft: '3px solid #2e7d32', padding: '1rem' }}>
+        <div className="row-between" style={{ marginBottom: '0.5rem' }}>
+          <span className="chip chip-green">✓ You're on your way</span>
+          <span className="chip chip-red" style={{ fontSize: '0.75rem' }}>Active emergency</span>
+        </div>
+        <p className="text-muted text-sm" style={{ marginBottom: '0.75rem' }}>
+          Keep this open — you can still see the victim's live location below.
+          Other guardians may also respond.
+        </p>
+
+        {/* Distance + live update */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <span style={{ fontSize: '1.25rem' }}>📍</span>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: '1.1rem' }}>{formatDistance(liveDistance)}</p>
+            <p className="text-muted text-xs">
+              {lastUpdate
+                ? `Live · updated ${Math.round((Date.now() - lastUpdate.getTime()) / 1000)}s ago`
+                : 'At time of alert'}
+            </p>
+          </div>
+          {victimLoc && (
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${victimLoc.latitude},${victimLoc.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                marginLeft: 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                background: '#1565c0',
+                color: '#fff',
+                borderRadius: '6px',
+                padding: '0.35rem 0.75rem',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              🗺 Navigate
+            </a>
+          )}
+        </div>
+
+        {/* Live Map stays visible */}
+        {victimLoc && (
+          <div style={{ position: 'relative' }}>
+            <VictimMap victimLoc={victimLoc} />
+            <div style={{
+              position: 'absolute', top: '0.5rem', left: '0.5rem',
+              background: 'rgba(0,198,255,0.15)', border: '1.5px solid #00c6ff',
+              borderRadius: '6px', padding: '0.2rem 0.5rem',
+              fontSize: '0.7rem', fontWeight: 600, color: '#00c6ff',
+              backdropFilter: 'blur(4px)',
+            }}>
+              ● Live tracking
+            </div>
+          </div>
+        )}
+
+        <p className="text-muted text-xs" style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+          This card will close when the victim cancels the SOS.
+        </p>
       </div>
     )
   }

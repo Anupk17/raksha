@@ -21,7 +21,7 @@ import {
 } from '@sa/activationConfig'
 
 export function SetupScreen() {
-  const { user } = useAuth()
+  const { user, lockApp } = useAuth()
   const navigate  = useNavigate()
   const uid       = user!.uid
 
@@ -34,9 +34,10 @@ export function SetupScreen() {
   const [showDisableModal, setShowDisableModal] = useState(false)
 
   // Section 6: PIN values held in refs — never in state
-  const duressPinRef    = useRef('')
-  const confirmPinRef   = useRef('')
-  const normalPinRef    = useRef('')
+  const duressPinRef       = useRef('')
+  const confirmPinRef      = useRef('')
+  const normalPinRef       = useRef('')
+  const normalPinConfirmRef = useRef('')
 
   useEffect(() => {
     getDoc(doc(db, 'users', uid)).then((snap) => {
@@ -64,8 +65,9 @@ export function SetupScreen() {
   async function doSave() {
     const full: SilentActivationConfig = {
       ...config,
-      duressPin:  config.duressPinEnabled  ? duressPinRef.current  : undefined,
-      normalPin:  config.duressPinEnabled  ? normalPinRef.current  : undefined,
+      duressPin:        config.duressPinEnabled ? duressPinRef.current         : undefined,
+      normalPin:        config.pinLockEnabled   ? normalPinRef.current         : undefined,
+      normalPinConfirm: config.pinLockEnabled   ? normalPinConfirmRef.current  : undefined,
     }
 
     // Validate (including PIN fields) — never throws
@@ -98,9 +100,10 @@ export function SetupScreen() {
       )
       await Promise.race([savePromise, timeoutPromise])
       // Zero PIN refs after save (belt-and-suspenders; saveActivationConfig already zeroes)
-      duressPinRef.current  = ''
-      confirmPinRef.current = ''
-      normalPinRef.current  = ''
+      duressPinRef.current      = ''
+      confirmPinRef.current     = ''
+      normalPinRef.current      = ''
+      normalPinConfirmRef.current = ''
       setBanner({ type: 'success', msg: 'Triggers saved.' })
       setTimeout(() => navigate('/home'), 1000)
     } catch (err: unknown) {
@@ -141,7 +144,7 @@ export function SetupScreen() {
       {/* Nav */}
       <nav className="nav-bar">
         <span className="nav-logo">🛡️ RAKSHA</span>
-        <button className="btn btn-ghost btn-sm" style={{ width: 'auto' }} onClick={() => void signOut(auth)}>
+        <button className="btn btn-ghost btn-sm" style={{ width: 'auto' }} onClick={() => { lockApp(); void signOut(auth) }}>
           Sign out
         </button>
       </nav>
@@ -152,6 +155,64 @@ export function SetupScreen() {
       </p>
 
       <form onSubmit={handleSave} className="stack">
+
+        {/* ── App Lock PIN ── */}
+        <div className="card stack-sm">
+          <div className="row-between">
+            <div>
+              <p style={{ fontWeight: 600 }}>App Lock PIN</p>
+              <p className="text-muted text-xs">
+                Requires a PIN each time the app opens
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              id="pin-lock-toggle"
+              className="toggle"
+              checked={!!config.pinLockEnabled}
+              onChange={(e) => setConfig((c) => ({ ...c, pinLockEnabled: e.target.checked }))}
+            />
+          </div>
+
+          {config.pinLockEnabled && (
+            <div className="stack-sm" style={{ marginTop: '0.25rem' }}>
+              <div className="input-group">
+                <label className="input-label" htmlFor="normal-pin-setup">
+                  Normal PIN (4–8 digits)
+                </label>
+                <input
+                  id="normal-pin-setup"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  className={`input ${fieldError('normalPin') ? 'input-error' : ''}`}
+                  placeholder="4–8 digits"
+                  onChange={(e) => { normalPinRef.current = e.target.value }}
+                />
+                {fieldError('normalPin') && (
+                  <p className="field-error">{fieldError('normalPin')}</p>
+                )}
+              </div>
+              <div className="input-group">
+                <label className="input-label" htmlFor="normal-pin-confirm-setup">
+                  Confirm Normal PIN
+                </label>
+                <input
+                  id="normal-pin-confirm-setup"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  className="input"
+                  placeholder="Repeat the PIN"
+                  onChange={(e) => { normalPinConfirmRef.current = e.target.value }}
+                />
+              </div>
+              <p className="text-muted text-xs">
+                Keep this different from your Duress PIN.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* ── Power Button ── */}
         <TriggerRow
@@ -264,18 +325,22 @@ export function SetupScreen() {
                 onChange={(e) => { confirmPinRef.current = e.target.value }}
               />
             </div>
-            <div className="input-group">
-              <label className="input-label" htmlFor="normal-pin">Your normal login PIN</label>
-              <input
-                id="normal-pin"
-                type="password"
-                inputMode="numeric"
-                autoComplete="off"
-                className="input"
-                placeholder="Must differ from duress PIN"
-                onChange={(e) => { normalPinRef.current = e.target.value }}
-              />
-            </div>
+            {/* Normal login PIN field — only shown when App Lock PIN is not configured
+                (the App Lock section already collected the normal PIN in that case) */}
+            {!config.pinLockEnabled && (
+              <div className="input-group">
+                <label className="input-label" htmlFor="normal-pin">Your normal login PIN</label>
+                <input
+                  id="normal-pin"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  className="input"
+                  placeholder="Must differ from duress PIN"
+                  onChange={(e) => { normalPinRef.current = e.target.value }}
+                />
+              </div>
+            )}
           </div>
         </TriggerRow>
 

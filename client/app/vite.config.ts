@@ -9,11 +9,11 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'RAKSHA',
-        short_name: 'RAKSHA',
-        description: 'Your personal safety guardian',
-        theme_color: '#0a0a0f',
-        background_color: '#0a0a0f',
+        name: 'Daily Notes',
+        short_name: 'Daily Notes',
+        description: 'Daily Notes — secure private notebook',
+        theme_color: '#1A2744',
+        background_color: '#1A2744',
         display: 'standalone',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },

@@ -74,8 +74,21 @@ export interface SilentActivationConfig {
    * Stored in Firestore; never the plaintext.
    */
   duressPinHash?: string;
-  /** The user's normal login PIN for equality guard. Never stored in this config. */
+
+  /** Whether the PIN lock screen is shown on every app launch. */
+  pinLockEnabled?: boolean;
+  /**
+   * The raw normal (quick-access) PIN — 4–8 numeric digits.
+   * Present only during `saveActivationConfig`; never stored.
+   */
   normalPin?: string;
+  /** Confirm field for normal PIN — only present at config time, never stored. */
+  normalPinConfirm?: string;
+  /**
+   * The bcrypt cost=10 hash of the normal (quick-access) PIN.
+   * Stored in Firestore; never the plaintext.
+   */
+  normalPinHash?: string;
 
   /** Whether the duress-phrase trigger is enabled. */
   duressPhraseEnabled?: boolean;
@@ -160,6 +173,30 @@ export function validateActivationConfig(
     }
   }
 
+  // ----- Normal PIN (when pin lock enabled) -----
+  if (config.pinLockEnabled) {
+    const nPin = config.normalPin ?? "";
+    if (!/^\d{4,8}$/.test(nPin)) {
+      errors.push({
+        field: "normalPin",
+        message: "Normal PIN must be 4 to 8 numeric digits.",
+      });
+    }
+    if (nPin.length > 0 && config.normalPinConfirm !== undefined && nPin !== config.normalPinConfirm) {
+      errors.push({
+        field: "normalPin",
+        message: "Normal PINs do not match.",
+      });
+    }
+    // Must differ from duress PIN
+    if (config.duressPinEnabled && config.duressPin && nPin === config.duressPin) {
+      errors.push({
+        field: "normalPin",
+        message: "Normal PIN must differ from your Duress PIN.",
+      });
+    }
+  }
+
   // ----- Duress PIN -----
   if (config.duressPinEnabled) {
     const pin = config.duressPin ?? "";
@@ -221,7 +258,7 @@ export function validateActivationConfig(
  */
 export type FirestoreConfigWriter = (
   userId: string,
-  patch: Omit<SilentActivationConfig, "duressPin" | "normalPin">
+  patch: Omit<SilentActivationConfig, "duressPin" | "normalPin" | "normalPinConfirm">
 ) => Promise<void>;
 
 /**
@@ -242,7 +279,7 @@ export async function saveActivationConfig(
   writeConfig: FirestoreConfigWriter
 ): Promise<void> {
   // Build the object to persist, excluding plaintext secrets
-  const toPersist: Omit<SilentActivationConfig, "duressPin" | "normalPin"> = {
+  const toPersist: Omit<SilentActivationConfig, "duressPin" | "normalPin" | "normalPinConfirm"> = {
     powerButtonEnabled: config.powerButtonEnabled,
     powerButtonTapCount: config.powerButtonTapCount,
     earbudEnabled: config.earbudEnabled,
@@ -252,21 +289,25 @@ export async function saveActivationConfig(
     duressPhraseEnabled: config.duressPhraseEnabled,
     duressPhrase: config.duressPhrase,
     testMode: config.testMode,
+    pinLockEnabled: config.pinLockEnabled,
   };
 
   // Hash duress PIN with bcrypt cost=10 (hardcoded)
   if (config.duressPinEnabled && config.duressPin) {
-    // bcrypt at cost=10 is CPU-intensive — yield to the event loop first
-    // so the UI doesn't appear frozen while hashing runs (especially on mobile)
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const hash = await bcrypt.hash(config.duressPin, BCRYPT_COST);
     toPersist.duressPinHash = hash;
-
-    // Zero the plaintext string from the config object after hashing.
-    // Note: JS strings are immutable so we cannot overwrite the memory buffer
-    // directly, but we remove our only reference to it immediately.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (config as any).duressPin = undefined;
+  }
+
+  // Hash normal PIN with bcrypt cost=10 when pin lock is enabled
+  if (config.pinLockEnabled && config.normalPin) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const normalHash = await bcrypt.hash(config.normalPin, BCRYPT_COST);
+    toPersist.normalPinHash = normalHash;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (config as any).normalPin = undefined;
   }
 
   await writeConfig(userId, toPersist);

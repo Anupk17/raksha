@@ -1,29 +1,86 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '../firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '../firebase'
+import type { SilentActivationConfig } from '@sa/activationConfig'
 
 interface AuthContextValue {
-  user: User | null
-  loading: boolean
+  user:             User | null
+  loading:          boolean
+  pinLockEnabled:   boolean
+  isUnlocked:       boolean
+  markUnlocked:     () => void
+  lockApp:          () => void
 }
 
-const AuthContext = createContext<AuthContextValue>({ user: null, loading: true })
+const AuthContext = createContext<AuthContextValue>({
+  user:           null,
+  loading:        true,
+  pinLockEnabled: false,
+  isUnlocked:     false,
+  markUnlocked:   () => {},
+  lockApp:        () => {},
+})
+
+// How long (ms) the app stays unlocked after backgrounding before requiring re-entry.
+const UNLOCK_GRACE_MS = 60_000
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user,           setUser]           = useState<User | null>(null)
+  const [loading,        setLoading]        = useState(true)
+  const [pinLockEnabled, setPinLockEnabled] = useState(false)
+  const [isUnlocked,     setIsUnlocked]     = useState(false)
+
+  // Track when the app was backgrounded to enforce the 60s grace period
+  const backgroundedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u)
+      if (u) {
+        // Load pinLockEnabled from silentActivationConfig
+        try {
+          const snap = await getDoc(doc(db, 'users', u.uid))
+          if (snap.exists()) {
+            const cfg = snap.data()['silentActivationConfig'] as SilentActivationConfig | undefined
+            setPinLockEnabled(!!cfg?.pinLockEnabled)
+          }
+        } catch {
+          // Non-fatal — default to no PIN lock if read fails
+        }
+      } else {
+        // User logged out — reset lock state
+        setPinLockEnabled(false)
+        setIsUnlocked(false)
+      }
       setLoading(false)
     })
     return unsub
   }, [])
 
+  // Handle app background / foreground — re-lock after grace period
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        backgroundedAtRef.current = Date.now()
+      } else {
+        const bg = backgroundedAtRef.current
+        if (bg !== null && Date.now() - bg > UNLOCK_GRACE_MS) {
+          setIsUnlocked(false)
+        }
+        backgroundedAtRef.current = null
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+
+  const markUnlocked = () => setIsUnlocked(true)
+  const lockApp      = () => setIsUnlocked(false)
+
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, pinLockEnabled, isUnlocked, markUnlocked, lockApp }}>
       {children}
     </AuthContext.Provider>
   )
