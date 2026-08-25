@@ -114,9 +114,20 @@ export async function handlePinSubmission(
   const firedAt = new Date(); // first line of handler (Task 10.1)
 
   const hashToCompare = opts.duressHash ?? STATIC_DUMMY_HASH;
-  const duressMatch = await bcrypt.compare(candidatePin, hashToCompare);
 
-  // Timing parity deadline: firedAt + P95 + 20ms margin
+  // Run duress check AND normal-PIN check in parallel so both complete by the
+  // deadline. This ensures renderWrongPinError fires at the same wall-clock
+  // time as renderDecoyScreen — verifyNormalPinViaServer does NOT add latency
+  // after the deadline, which was the P33 failure mode.
+  const [duressMatch, isNormalMatch] = await Promise.all([
+    bcrypt.compare(candidatePin, hashToCompare),
+    opts.verifyNormalPinViaServer(candidatePin),
+  ]);
+
+  // Timing parity deadline: firedAt + P95 + 20ms margin.
+  // Both bcrypt.compare (duress) and verifyNormalPinViaServer (normal) have
+  // already completed above — the deadline pad only needs to cover the slower
+  // of the two, which is the duress bcrypt.compare at cost=10.
   const deadline = firedAt.getTime() + measuredP95BcryptCost10Ms + 20;
   const delay = deadline - Date.now();
   if (delay > 0) {
@@ -126,13 +137,9 @@ export async function handlePinSubmission(
   if (duressMatch) {
     opts.renderDecoyScreen();
     opts.triggerDetector.onTriggerFired("duress_pin", firedAt);
+  } else if (isNormalMatch) {
+    opts.navigateToHome();
   } else {
-    // Normal PIN check via server is executed after the timing parity deadline (Decision 3)
-    const isNormalMatch = await opts.verifyNormalPinViaServer(candidatePin);
-    if (isNormalMatch) {
-      opts.navigateToHome();
-    } else {
-      opts.renderWrongPinError();
-    }
+    opts.renderWrongPinError();
   }
 }

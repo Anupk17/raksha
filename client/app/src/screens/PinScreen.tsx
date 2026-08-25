@@ -130,22 +130,24 @@ function PinKeypad({ pinDisplay, disabled, shaking, errorMsg, onDigit, onDelete,
         })}
       </div>
 
-      {/* Submit — only shown when ≥4 digits entered */}
-      {pinDisplay.length >= 4 && !disabled && (
+      {/* Submit — always visible so user can tap after any digit count ≥4 */}
+      {pinDisplay.length >= 1 && !disabled && (
         <button
           onClick={onSubmit}
           style={{
             marginTop: '1rem',
             width: '100%',
             padding: '0.75rem',
-            background: 'rgba(255,255,255,0.15)',
+            background: pinDisplay.length >= 4 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)',
             border: '1px solid rgba(255,255,255,0.3)',
             borderRadius: '10px',
-            color: '#fff',
+            color: pinDisplay.length >= 4 ? '#fff' : 'rgba(255,255,255,0.3)',
             fontSize: '1rem',
             fontWeight: 600,
-            cursor: 'pointer',
+            cursor: pinDisplay.length >= 4 ? 'pointer' : 'default',
           }}
+          disabled={pinDisplay.length < 4}
+          aria-label="Unlock"
         >
           Unlock
         </button>
@@ -205,9 +207,11 @@ export function PinScreen() {
     }
   }, [screenState])
 
-  // ── Auto-submit at 6 digits (minimum duress PIN length) ─────────────────
+  // ── No auto-submit — user taps Unlock button explicitly.
+  // Auto-submit only at max length (8) so neither the 4-digit normal PIN
+  // nor the 6-digit duress PIN accidentally fires before the user is done.
   useEffect(() => {
-    if (digits.length === 6 && screenState.phase === 'entry') {
+    if (digits.length === 8 && screenState.phase === 'entry') {
       void submitPin(digits)
     }
   }, [digits]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -225,16 +229,21 @@ export function PinScreen() {
   function handleDuressTrigger(_type: string, firedAt: Date) {
     void (async () => {
       try {
+        // Get location in background (doesn't block decoy render)
+        const { getCurrentHashedLocation } = await import('../hooks/useGeolocation')
+        const location = await getCurrentHashedLocation()
+
         const fn = httpsCallable(fns, 'createSOSSession')
-        await fn({
+        const result = await fn({
           triggerType: 'duress_pin',
           triggeredAt: firedAt.toISOString(),
           syncedAt:    new Date().toISOString(),
-          location:    null,  // GPS not available from PIN screen
+          location,    // real GPS if available, null on denial
           deviceInfo:  navigator.userAgent.slice(0, 200),
         })
+        console.log('[PinScreen] duress_pin SOS created:', (result.data as { sessionId?: string }).sessionId)
       } catch (err) {
-        // Non-fatal — decoy is already showing. Log silently.
+        // Non-fatal — decoy is already showing.
         console.error('[PinScreen] duress_pin SOS trigger failed:', err)
       }
     })()
