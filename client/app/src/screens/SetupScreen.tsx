@@ -66,7 +66,7 @@ export function SetupScreen() {
     const full: SilentActivationConfig = {
       ...config,
       duressPin:        config.duressPinEnabled ? duressPinRef.current         : undefined,
-      normalPin:        config.pinLockEnabled   ? normalPinRef.current         : undefined,
+      normalPin:        normalPinRef.current || undefined,  // used by both App Lock and Duress PIN mismatch guard
       normalPinConfirm: config.pinLockEnabled   ? normalPinConfirmRef.current  : undefined,
     }
 
@@ -88,10 +88,11 @@ export function SetupScreen() {
     setBanner(null)
     try {
       const savePromise = saveActivationConfig(uid, full, async (userId, patch) => {
+        // Write the complete config — do NOT strip false/undefined, saveActivationConfig
+        // already writes explicit false for all boolean flags so the full map persists.
         const cleaned = Object.fromEntries(
-          Object.entries(patch).filter(([_, v]) => v !== undefined)
+          Object.entries(patch).filter(([, v]) => v !== undefined)
         )
-        // Fire the write but don't await server ACK — navigate immediately
         void setDoc(doc(db, 'users', userId), { silentActivationConfig: cleaned }, { merge: true })
       })
       // saveActivationConfig itself (bcrypt hash if PIN enabled) must complete

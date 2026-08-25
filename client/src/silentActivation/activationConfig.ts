@@ -278,18 +278,21 @@ export async function saveActivationConfig(
   config: SilentActivationConfig,
   writeConfig: FirestoreConfigWriter
 ): Promise<void> {
-  // Build the object to persist, excluding plaintext secrets
+  // Build the object to persist, excluding plaintext secrets.
+  // Boolean flags are written as explicit false (not undefined) so the Firestore
+  // merge writes the complete config map — prevents stale fields from previous
+  // saves persisting when a trigger is disabled.
   const toPersist: Omit<SilentActivationConfig, "duressPin" | "normalPin" | "normalPinConfirm"> = {
-    powerButtonEnabled: config.powerButtonEnabled,
+    powerButtonEnabled:  config.powerButtonEnabled  ?? false,
     powerButtonTapCount: config.powerButtonTapCount,
-    earbudEnabled: config.earbudEnabled,
-    shakeEnabled: config.shakeEnabled,
-    shakeSensitivity: config.shakeEnabled ? (config.shakeSensitivity ?? 2) : undefined,
-    duressPinEnabled: config.duressPinEnabled,
-    duressPhraseEnabled: config.duressPhraseEnabled,
-    duressPhrase: config.duressPhrase,
-    testMode: config.testMode,
-    pinLockEnabled: config.pinLockEnabled,
+    earbudEnabled:       config.earbudEnabled        ?? false,
+    shakeEnabled:        config.shakeEnabled         ?? false,
+    shakeSensitivity:    config.shakeEnabled ? (config.shakeSensitivity ?? 2) : undefined,
+    duressPinEnabled:    config.duressPinEnabled     ?? false,
+    duressPhraseEnabled: config.duressPhraseEnabled  ?? false,
+    duressPhrase:        config.duressPhrase,
+    testMode:            config.testMode             ?? false,
+    pinLockEnabled:      config.pinLockEnabled       ?? false,
   };
 
   // Hash duress PIN with bcrypt cost=10 (hardcoded)
@@ -301,8 +304,10 @@ export async function saveActivationConfig(
     (config as any).duressPin = undefined;
   }
 
-  // Hash normal PIN with bcrypt cost=10 when pin lock is enabled
-  if (config.pinLockEnabled && config.normalPin) {
+  // Hash normal PIN when pin lock is enabled OR when duress PIN is enabled
+  // (the duress PIN mismatch guard requires knowing the normal PIN hash,
+  // and the PIN screen needs normalPinHash to verify the user on launch).
+  if (config.normalPin && (config.pinLockEnabled || config.duressPinEnabled)) {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const normalHash = await bcrypt.hash(config.normalPin, BCRYPT_COST);
     toPersist.normalPinHash = normalHash;
