@@ -3,16 +3,19 @@ import { AuthProvider } from './contexts/AuthContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { RequireAuth } from './components/RequireAuth'
 import { useAuth } from './contexts/AuthContext'
-import { LoginScreen }           from './screens/LoginScreen'
-import { PinScreen }             from './screens/PinScreen'
-import { HomeScreen }            from './screens/HomeScreen'
-import { SetupScreen }           from './screens/SetupScreen'
-import { CountdownScreen }       from './screens/CountdownScreen'
-import { GuardianInboxScreen }   from './screens/GuardianInboxScreen'
-import { GuardianHistoryScreen } from './screens/GuardianHistoryScreen'
-import { EvidenceCaptureScreen } from './screens/EvidenceCaptureScreen'
+import { LoginScreen }            from './screens/LoginScreen'
+import { PinScreen }              from './screens/PinScreen'
+import { HomeScreen }             from './screens/HomeScreen'
+import { SetupScreen }            from './screens/SetupScreen'
+import { CountdownScreen }        from './screens/CountdownScreen'
+import { GuardianInboxScreen }    from './screens/GuardianInboxScreen'
+import { GuardianHistoryScreen }  from './screens/GuardianHistoryScreen'
+import { EvidenceCaptureScreen }  from './screens/EvidenceCaptureScreen'
 import { EvidenceTimelineScreen } from './screens/EvidenceTimelineScreen'
-import { LegalExportScreen }     from './screens/LegalExportScreen'
+import { LegalExportScreen }      from './screens/LegalExportScreen'
+import { SettingsScreen }         from './screens/SettingsScreen'
+import { OnboardingScreen }       from './screens/OnboardingScreen'
+import { TrustedContactsScreen }  from './screens/TrustedContactsScreen'
 
 /**
  * RequirePin — redirects to /pin if PIN lock is enabled and app is not yet unlocked.
@@ -24,6 +27,24 @@ function RequirePin() {
 
   if (pinLockEnabled && !isUnlocked) {
     return <Navigate to="/pin" state={{ from: location }} replace />
+  }
+  return <Outlet />
+}
+
+/**
+ * RequireOnboarding — redirects first-run victim users to /onboarding
+ * before showing /home. Only fires when onboardingComplete is false and
+ * the user is landing on /home (not guardian-inbox or other routes).
+ */
+function RequireOnboarding() {
+  const { onboardingComplete, loading } = useAuth()
+  const location = useLocation()
+
+  // Don't flash the wrong screen while auth resolves
+  if (loading) return null
+
+  if (!onboardingComplete && location.pathname === '/home') {
+    return <Navigate to="/onboarding" replace />
   }
   return <Outlet />
 }
@@ -45,11 +66,21 @@ export default function App() {
             <Route element={<RequireAuth />}>
               <Route element={<RequirePin />}>
                 <Route path="/"                element={<Navigate to="/home" replace />} />
-                <Route path="/home"            element={<HomeScreen />} />
+
+                {/* /home has an extra onboarding guard for first-run victims */}
+                <Route element={<RequireOnboarding />}>
+                  <Route path="/home" element={<HomeScreen />} />
+                </Route>
+
                 <Route path="/setup"           element={<SetupScreen />} />
                 <Route path="/countdown"       element={<CountdownScreen />} />
                 <Route path="/guardian-inbox"   element={<GuardianInboxScreen />} />
                 <Route path="/guardian-history" element={<GuardianHistoryScreen />} />
+
+                {/* Onboarding, Settings, Trusted Contacts */}
+                <Route path="/onboarding"                  element={<OnboardingScreen />} />
+                <Route path="/settings"                    element={<SettingsScreen />} />
+                <Route path="/settings/trusted-contacts"   element={<TrustedContactsScreen />} />
 
                 {/* Evidence Trail */}
                 <Route path="/evidence/capture"               element={<EvidenceCaptureScreen />} />

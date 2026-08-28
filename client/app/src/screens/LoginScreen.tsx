@@ -69,10 +69,16 @@ export function LoginScreen() {
 
       // Check if PIN lock is configured — if so, go to /pin first
       const userSnap = await getDoc(doc(db, 'users', uid))
-      const cfg = userSnap.exists()
-        ? (userSnap.data()['silentActivationConfig'] as { pinLockEnabled?: boolean } | undefined)
-        : undefined
+      const userData = userSnap.exists() ? userSnap.data() : null
+      const cfg = userData?.['silentActivationConfig'] as { pinLockEnabled?: boolean } | undefined
       const pinLocked = !!cfg?.pinLockEnabled
+
+      // New victim users (no onboardingComplete) go to onboarding instead of /home
+      const onboardingDone = !!(userData?.['onboardingComplete'])
+      if (!isGuardian && !onboardingDone) {
+        navigate('/onboarding', { replace: true })
+        return
+      }
 
       let target = isGuardian ? '/guardian-inbox' : '/home'
       if (!isGuardian && from && from !== '/' && from !== '/guardian-inbox') {

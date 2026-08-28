@@ -98,6 +98,20 @@ service cloud.firestore {
     }
 
     // -----------------------------------------------------------------------
+    // /trusted_contacts/{contactId}
+    //
+    // Owner-only read/write. The ownerUserId field scopes contacts to a
+    // single user. onSOSSessionUpdate reads this collection via Admin SDK
+    // (bypasses these rules) — client access is restricted to the owner only.
+    // -----------------------------------------------------------------------
+    match /trusted_contacts/{contactId} {
+      allow read, update, delete: if request.auth != null
+                                  && resource.data.ownerUserId == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUserId == request.auth.uid;
+    }
+
+    // -----------------------------------------------------------------------
     // /guardian_pings/{pingId}
     //
     // Read: only the specific guardian assigned to the ping can read it.

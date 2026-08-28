@@ -127,7 +127,7 @@ export function HomeScreen() {
         {enabledTriggers.length === 0 ? (
           <div className="banner banner-warning" role="alert">
             No triggers configured. RAKSHA will not respond to any gesture.
-            <Link to="/setup" style={{ marginLeft: '0.5rem', fontWeight: 600 }}>Set up now →</Link>
+            <Link to="/settings" style={{ marginLeft: '0.5rem', fontWeight: 600 }}>Set up now →</Link>
           </div>
         ) : (
           <div className="row" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -189,8 +189,8 @@ export function HomeScreen() {
           </div>
         )}
 
-        <Link to="/setup" className="btn btn-ghost" style={{ textAlign: 'center', padding: '0.75rem' }}>
-          ⚙ Configure triggers
+        <Link to="/settings" className="btn btn-ghost" style={{ textAlign: 'center', padding: '0.75rem' }}>
+          ⚙ Settings
         </Link>
 
         {config?.shakeEnabled && (

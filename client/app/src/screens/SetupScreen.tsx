@@ -6,7 +6,7 @@
  * after the call — it never appears in React DevTools or network logs.
  */
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 import { auth, db } from '../firebase'
@@ -23,6 +23,7 @@ import {
 export function SetupScreen() {
   const { user, lockApp } = useAuth()
   const navigate  = useNavigate()
+  const location  = useLocation()
   const uid       = user!.uid
 
   // ── Form state (non-PIN fields only) ─────────────────────────────────────
@@ -106,7 +107,9 @@ export function SetupScreen() {
       normalPinRef.current      = ''
       normalPinConfirmRef.current = ''
       setBanner({ type: 'success', msg: 'Triggers saved.' })
-      setTimeout(() => navigate('/home'), 1000)
+      // Return to onboarding if that's where we came from
+      const returnTo = (location.state as { returnTo?: string } | null)?.returnTo
+      setTimeout(() => navigate(returnTo ?? '/home', { replace: true }), 1000)
     } catch (err: unknown) {
       console.error('[SetupScreen] saveActivationConfig failed:', err)
       const errMsg = err instanceof Error ? err.message : String(err)

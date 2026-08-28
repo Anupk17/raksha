@@ -9,6 +9,14 @@
       ]
     },
     {
+      "collectionGroup": "trusted_contacts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerUserId", "order": "ASCENDING" },
+        { "fieldPath": "priority",    "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "evidence",
       "queryScope": "COLLECTION",
       "fields": [
