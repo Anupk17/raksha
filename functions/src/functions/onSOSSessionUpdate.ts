@@ -159,9 +159,24 @@ export async function runOnSOSSessionUpdate(
     }
   }
 
-  // Step 4 — Record dispatched pings OR execute fallback path
+  // Step 4 — Record dispatched pings AND always notify trusted contacts via FCM
+  // Contacts are notified regardless of whether guardians were found —
+  // a contact who gets an alert when a guardian is already responding is fine;
+  // a contact who hears nothing if the guardian doesn't show up is not.
+
+  // Get victim's display name once for use in both notification paths
+  let victimName = "Someone you know";
+  try {
+    const victimRecord = await getAuth().getUser(userId);
+    victimName = victimRecord.displayName ?? victimRecord.email ?? victimName;
+  } catch { /* non-fatal */ }
+
+  const triggeredAt = afterData.triggeredAt
+    ? deserializeFirestoreDate(afterData.triggeredAt, "triggeredAt")
+    : new Date();
+
   if (pingedIds.length > 0) {
-    // Read-spread-write transaction to append guardiansPinged safely without arrayUnion
+    // Guardians found — record pings
     await db.runTransaction(async (tx) => {
       const doc = await tx.get(sessionRef);
       if (!doc.exists) return;
@@ -170,17 +185,20 @@ export async function runOnSOSSessionUpdate(
       const merged = Array.from(new Set([...currentPinged, ...pingedIds]));
       tx.update(sessionRef, { guardiansPinged: merged });
     });
-  } else {
-    // Fallback: notify priority/trusted contacts
-    const contactsSnap = await db
-      .collection("trusted_contacts")
-      .where("ownerUserId", "==", userId)
-      .where("notifyOnSOS", "==", true)
-      .get();
+  }
 
-    const contactIds = contactsSnap.docs.map((doc) => doc.id);
+  // Always query trusted contacts and notify them via FCM
+  const contactsSnap = await db
+    .collection("trusted_contacts")
+    .where("ownerUserId", "==", userId)
+    .where("notifyOnSOS", "==", true)
+    .get();
 
-    if (contactIds.length > 0) {
+  const contactIds = contactsSnap.docs.map((doc) => doc.id);
+
+  if (contactIds.length > 0) {
+    if (pingedIds.length === 0) {
+      // No guardians found — write contactsNotified so UI shows fallback state
       await db.runTransaction(async (tx) => {
         const doc = await tx.get(sessionRef);
         if (!doc.exists) return;
@@ -189,33 +207,21 @@ export async function runOnSOSSessionUpdate(
         const merged = Array.from(new Set([...currentNotified, ...contactIds]));
         tx.update(sessionRef, { contactsNotified: merged });
       });
-
-      // Send FCM push notifications to contacts who have RAKSHA installed.
-      // Get victim's display name for the notification body.
-      let victimName = "Someone you know";
-      try {
-        const victimRecord = await getAuth().getUser(userId);
-        victimName = victimRecord.displayName ?? victimRecord.email ?? victimName;
-      } catch { /* non-fatal — use fallback name */ }
-
-      const triggeredAt = afterData.triggeredAt
-        ? deserializeFirestoreDate(afterData.triggeredAt, "triggeredAt")
-        : new Date();
-
-      // Fire-and-forget FCM sends — don't block session update completion
-      await Promise.allSettled(
-        contactsSnap.docs.map(async (contactDoc) => {
-          const contactRakshaUid = contactDoc.data()["contactRakshaUid"] as string | null;
-          if (!contactRakshaUid) return; // Contact not yet a RAKSHA user
-          await sendSosNotificationToContact(
-            contactRakshaUid,
-            victimName,
-            triggeredAt,
-            db,
-            functions.logger
-          );
-        })
-      );
     }
+
+    // Send FCM push to all linked contacts regardless of guardian path
+    await Promise.allSettled(
+      contactsSnap.docs.map(async (contactDoc) => {
+        const contactRakshaUid = contactDoc.data()["contactRakshaUid"] as string | null;
+        if (!contactRakshaUid) return;
+        await sendSosNotificationToContact(
+          contactRakshaUid,
+          victimName,
+          triggeredAt,
+          db,
+          functions.logger
+        );
+      })
+    );
   }
 }
