@@ -14,6 +14,8 @@ export interface TrustedContact {
   ownerUserId:           string
   name:                  string
   phoneNumber:           string
+  email:                 string
+  contactRakshaUid:      string | null
   relationship:          string
   priority:              number
   notifyOnSOS:           boolean
@@ -25,12 +27,13 @@ export interface TrustedContact {
 export interface ContactFormValues {
   name:         string
   phoneNumber:  string
+  email:        string
   relationship: string
   notifyOnSOS:  boolean
 }
 
 export const EMPTY_FORM: ContactFormValues = {
-  name: '', phoneNumber: '', relationship: '', notifyOnSOS: true,
+  name: '', phoneNumber: '', email: '', relationship: '', notifyOnSOS: true,
 }
 
 /** Phone: 7–15 chars, digits plus common formatting chars */
@@ -60,6 +63,8 @@ export function deserializeTrustedContact(raw: DocumentData): TrustedContact | n
       ownerUserId:           raw['ownerUserId']           as string,
       name:                  raw['name']                  as string,
       phoneNumber:           raw['phoneNumber']           as string,
+      email:                 (raw['email'] as string)     ?? '',
+      contactRakshaUid:      (raw['contactRakshaUid'] as string | null) ?? null,
       relationship:          (raw['relationship'] as string) ?? '',
       priority:              (raw['priority'] as number) ?? 1,
       notifyOnSOS:           (raw['notifyOnSOS'] as boolean) ?? true,
@@ -87,6 +92,8 @@ export function validateContactForm(
   const digitsOnly = values.phoneNumber.replace(/[\s\-()]/g, '')
   if (!PHONE_REGEX.test(values.phoneNumber) || digitsOnly.replace('+', '').length < 7)
     return 'Enter a valid phone number (7–15 digits).'
+  if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email))
+    return 'Enter a valid email address.'
   if (values.relationship.length > 30) return 'Relationship must be 30 characters or fewer.'
   const duplicate = allContacts.find(
     (c) => c.phoneNumber === values.phoneNumber && c.id !== excludeId

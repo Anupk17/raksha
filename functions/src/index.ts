@@ -36,6 +36,7 @@ import { createTestTriggerHandler } from "./functions/testTrigger.js";
 import type { CreateSOSSessionPayload } from "./types/sosSession.js";
 import { runOnSOSSessionUpdate } from "./functions/onSOSSessionUpdate.js";
 import { createRespondToGuardianPingHandler } from "./functions/respondToGuardianPing.js";
+import { lookupUserByEmailHandler } from "./functions/lookupUserByEmail.js";
 
 // Initialize Firebase Admin exactly once
 if (getApps().length === 0) {
@@ -235,3 +236,7 @@ export const onSOSSessionUpdate = functions.firestore
 export const respondToGuardianPing = functions.https.onCall(
   createRespondToGuardianPingHandler(getFirestore())
 );
+
+// lookupUserByEmail — HTTPS callable Cloud Function.
+// Used by TrustedContactsScreen to link a contact's email to their RAKSHA UID.
+export const lookupUserByEmail = lookupUserByEmailHandler;

@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import { useFCMToken } from '../hooks/useFCMToken'
 import type { SilentActivationConfig } from '@sa/activationConfig'
 
 interface AuthContextValue {
@@ -86,6 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const markUnlocked = () => setIsUnlocked(true)
   const lockApp      = () => setIsUnlocked(false)
+
+  // Register FCM token whenever a user is logged in on a native device
+  useFCMToken(user)
 
   const markOnboardingComplete = async () => {
     setOnboardingComplete(true)

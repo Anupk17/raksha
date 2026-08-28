@@ -64,18 +64,31 @@ export function SetupScreen() {
 
   // ── Save flow ─────────────────────────────────────────────────────────────
   async function doSave() {
+    // Only pass duressPin if the user actually typed something new.
+    // If the field is blank and a hash already exists, keep the existing hash.
+    const changingDuressPin = duressPinRef.current.length > 0
+    const changingNormalPin = normalPinRef.current.length > 0
+
     const full: SilentActivationConfig = {
       ...config,
-      duressPin:        config.duressPinEnabled ? duressPinRef.current         : undefined,
-      normalPin:        normalPinRef.current || undefined,  // used by both App Lock and Duress PIN mismatch guard
-      normalPinConfirm: config.pinLockEnabled   ? normalPinConfirmRef.current  : undefined,
+      duressPin:        config.duressPinEnabled && changingDuressPin ? duressPinRef.current  : undefined,
+      normalPin:        changingNormalPin ? normalPinRef.current         : undefined,
+      normalPinConfirm: changingNormalPin ? normalPinConfirmRef.current  : undefined,
     }
 
-    // Validate (including PIN fields) — never throws
+    // Validate — skip PIN validation when keeping existing hash (blank field)
     const errors = validateActivationConfig(full)
-    if (config.duressPinEnabled && duressPinRef.current !== confirmPinRef.current) {
+
+    // Only check confirm match if user is entering a new duress PIN
+    if (config.duressPinEnabled && changingDuressPin && duressPinRef.current !== confirmPinRef.current) {
       errors.push({ field: 'duressPin', message: 'PINs do not match.' })
     }
+
+    // If duress PIN is enabled but no new PIN entered and no existing hash, require entry
+    if (config.duressPinEnabled && !changingDuressPin && !config.duressPinHash) {
+      errors.push({ field: 'duressPin', message: 'Please enter a Duress PIN.' })
+    }
+
     if (errors.length) {
       setFieldErrors(errors)
       return
@@ -89,11 +102,18 @@ export function SetupScreen() {
     setBanner(null)
     try {
       const savePromise = saveActivationConfig(uid, full, async (userId, patch) => {
-        // Write the complete config — do NOT strip false/undefined, saveActivationConfig
-        // already writes explicit false for all boolean flags so the full map persists.
+        // Write the complete config. If user didn't re-enter their duress PIN,
+        // preserve the existing duressPinHash rather than clearing it.
         const cleaned = Object.fromEntries(
           Object.entries(patch).filter(([, v]) => v !== undefined)
         )
+        // Preserve existing hashes if no new PIN was provided
+        if (!changingDuressPin && config.duressPinHash) {
+          cleaned['duressPinHash'] = config.duressPinHash
+        }
+        if (!changingNormalPin && config.normalPinHash) {
+          cleaned['normalPinHash'] = config.normalPinHash
+        }
         void setDoc(doc(db, 'users', userId), { silentActivationConfig: cleaned }, { merge: true })
       })
       // saveActivationConfig itself (bcrypt hash if PIN enabled) must complete
@@ -301,9 +321,17 @@ export function SetupScreen() {
           onChange={(v) => setConfig((c) => ({ ...c, duressPinEnabled: v }))}
         >
           <div className="stack-sm">
+            {/* Show "PIN already configured" when hash exists — user only needs to
+                re-enter if they want to CHANGE it. Plaintext is never re-displayed. */}
+            {config.duressPinHash && (
+              <div className="banner banner-info" role="status" style={{ fontSize: '0.8rem' }}>
+                ✓ Duress PIN is set. Leave the fields below blank to keep your current PIN,
+                or enter a new one to change it.
+              </div>
+            )}
             <div className="input-group">
               <label className="input-label" htmlFor="duress-pin">
-                Duress PIN (6–8 digits)
+                {config.duressPinHash ? 'New Duress PIN (optional — leave blank to keep current)' : 'Duress PIN (6–8 digits)'}
               </label>
               <input
                 id="duress-pin"
@@ -311,8 +339,7 @@ export function SetupScreen() {
                 inputMode="numeric"
                 autoComplete="off"
                 className={`input ${fieldError('duressPin') ? 'input-error' : ''}`}
-                placeholder="6–8 digits"
-                /* Section 6: value is never read back into state — only into ref */
+                placeholder={config.duressPinHash ? 'Leave blank to keep current PIN' : '6–8 digits'}
                 onChange={(e) => { duressPinRef.current = e.target.value }}
               />
               {fieldError('duressPin') && <p className="field-error">{fieldError('duressPin')}</p>}
@@ -325,12 +352,11 @@ export function SetupScreen() {
                 inputMode="numeric"
                 autoComplete="off"
                 className="input"
-                placeholder="Repeat the PIN"
+                placeholder={config.duressPinHash ? 'Leave blank to keep current PIN' : 'Repeat the PIN'}
                 onChange={(e) => { confirmPinRef.current = e.target.value }}
               />
             </div>
-            {/* Normal login PIN field — only shown when App Lock PIN is not configured
-                (the App Lock section already collected the normal PIN in that case) */}
+            {/* Normal login PIN field — only shown when App Lock PIN is not configured */}
             {!config.pinLockEnabled && (
               <div className="input-group">
                 <label className="input-label" htmlFor="normal-pin">Your normal login PIN</label>

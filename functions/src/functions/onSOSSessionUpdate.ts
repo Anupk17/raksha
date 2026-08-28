@@ -12,9 +12,11 @@
  */
 import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import * as functions from "firebase-functions";
+import { getAuth } from "firebase-admin/auth";
 import { deserializeFirestoreDate } from "../utils/assertDate.js";
 import type { SOSSession } from "../types/sosSession.js";
 import type { Guardian, GuardianPing } from "../types/guardian.js";
+import { sendSosNotificationToContact } from "./sendSosNotification.js";
 
 /**
  * Calculates the geodetic distance between two coordinates using the Haversine formula.
@@ -187,6 +189,33 @@ export async function runOnSOSSessionUpdate(
         const merged = Array.from(new Set([...currentNotified, ...contactIds]));
         tx.update(sessionRef, { contactsNotified: merged });
       });
+
+      // Send FCM push notifications to contacts who have RAKSHA installed.
+      // Get victim's display name for the notification body.
+      let victimName = "Someone you know";
+      try {
+        const victimRecord = await getAuth().getUser(userId);
+        victimName = victimRecord.displayName ?? victimRecord.email ?? victimName;
+      } catch { /* non-fatal — use fallback name */ }
+
+      const triggeredAt = afterData.triggeredAt
+        ? deserializeFirestoreDate(afterData.triggeredAt, "triggeredAt")
+        : new Date();
+
+      // Fire-and-forget FCM sends — don't block session update completion
+      await Promise.allSettled(
+        contactsSnap.docs.map(async (contactDoc) => {
+          const contactRakshaUid = contactDoc.data()["contactRakshaUid"] as string | null;
+          if (!contactRakshaUid) return; // Contact not yet a RAKSHA user
+          await sendSosNotificationToContact(
+            contactRakshaUid,
+            victimName,
+            triggeredAt,
+            db,
+            functions.logger
+          );
+        })
+      );
     }
   }
 }

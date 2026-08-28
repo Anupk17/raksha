@@ -82,7 +82,9 @@ export function CountdownScreen() {
 
         <p style={{ color: 'var(--text)', lineHeight: 1.7, maxWidth: '300px' }}>
           Help is on the way.<br />
-          Your emergency contacts have been notified.
+          <span className="text-muted" style={{ fontSize: '0.875rem' }}>
+            Nearby guardians and emergency contacts are being alerted.
+          </span>
         </p>
 
         {/* Guardian dispatch status — derived from sosSessions.guardiansPinged / contactsNotified */}

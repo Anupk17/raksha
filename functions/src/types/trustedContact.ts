@@ -17,6 +17,14 @@ export interface TrustedContact {
   name: string;
   /** Phone number. Required, 7–15 chars. */
   phoneNumber: string;
+  /** Email address of the contact. Used to look up their RAKSHA account. */
+  email: string;
+  /**
+   * Firebase Auth UID of the contact's RAKSHA account, if they have one.
+   * Populated by the lookupUserByEmail Cloud Function when the victim saves
+   * the contact's email. null if the contact is not yet a RAKSHA user.
+   */
+  contactRakshaUid: string | null;
   /** Relationship to the owner (e.g. "sister", "friend"). Optional. */
   relationship: string;
   /** 1-based priority for notification ordering. Lower = notified first. */

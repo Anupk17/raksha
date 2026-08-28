@@ -54,6 +54,7 @@ public class MainActivity extends BridgeActivity {
 
         initMediaSession();
         requestNotificationPermissionIfNeeded();
+        createSosNotificationChannel();
     }
 
     @Override
@@ -105,6 +106,22 @@ public class MainActivity extends BridgeActivity {
                         new String[]{Manifest.permission.POST_NOTIFICATIONS},
                         REQUEST_NOTIFICATIONS);
             }
+        }
+    }
+
+    /** Create the high-priority notification channel used for SOS alerts. */
+    private void createSosNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                "sos_alerts",
+                "RAKSHA SOS Alerts",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Emergency SOS notifications from people you protect");
+            channel.enableVibration(true);
+            channel.enableLights(true);
+            android.app.NotificationManager manager = getSystemService(android.app.NotificationManager.class);
+            if (manager != null) manager.createNotificationChannel(channel);
         }
     }
 

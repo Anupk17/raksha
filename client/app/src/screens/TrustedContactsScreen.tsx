@@ -21,7 +21,8 @@ import {
   query, where, orderBy, writeBatch,
   type DocumentData,
 } from 'firebase/firestore'
-import { db } from '../firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, fns } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import {
   deserializeTrustedContact,
@@ -50,24 +51,44 @@ type FormState =
 // ---------------------------------------------------------------------------
 
 interface ContactFormProps {
-  initial:    ContactFormValues
+  initial:     ContactFormValues
   allContacts: TrustedContact[]
-  excludeId?: string
-  onSave:    (values: ContactFormValues) => Promise<void>
-  onCancel:  () => void
-  saving:    boolean
+  excludeId?:  string
+  onSave:      (values: ContactFormValues, rakshaUid: string | null) => Promise<void>
+  onCancel:    () => void
+  saving:      boolean
 }
 
 function ContactForm({ initial, allContacts, excludeId, onSave, onCancel, saving }: ContactFormProps) {
-  const [values,   setValues]   = useState<ContactFormValues>(initial)
-  const [error,    setError]    = useState<string | null>(null)
+  const [values,       setValues]       = useState<ContactFormValues>(initial)
+  const [error,        setError]        = useState<string | null>(null)
+  const [lookingUp,    setLookingUp]    = useState(false)
+  const [lookupResult, setLookupResult] = useState<{ uid: string | null; checked: boolean } | null>(null)
+
+  async function handleEmailBlur() {
+    if (!values.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+      setLookupResult(null)
+      return
+    }
+    setLookingUp(true)
+    try {
+      const fn = httpsCallable<{ email: string }, { uid: string | null; found: boolean }>(fns, 'lookupUserByEmail')
+      const result = await fn({ email: values.email.trim().toLowerCase() })
+      setLookupResult({ uid: result.data.uid, checked: true })
+    } catch {
+      setLookupResult({ uid: null, checked: false })
+    } finally {
+      setLookingUp(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const err = validateContactForm(values, allContacts, excludeId)
     if (err) { setError(err); return }
     setError(null)
-    await onSave(values)
+    const rakshaUid = lookupResult?.checked ? lookupResult.uid : null
+    await onSave(values, rakshaUid)
   }
 
   return (
@@ -102,6 +123,27 @@ function ContactForm({ initial, allContacts, excludeId, onSave, onCancel, saving
           maxLength={15}
           required
         />
+      </div>
+
+      <div className="input-group">
+        <label className="input-label" htmlFor="tc-email">
+          RAKSHA account email (optional — for push notifications)
+        </label>
+        <input
+          id="tc-email"
+          className="input"
+          type="email"
+          placeholder="their.email@example.com"
+          value={values.email}
+          onChange={(e) => { setValues((v) => ({ ...v, email: e.target.value })); setLookupResult(null) }}
+          onBlur={() => void handleEmailBlur()}
+        />
+        {lookingUp && <p className="text-muted text-xs">Checking RAKSHA account…</p>}
+        {!lookingUp && lookupResult?.checked && (
+          lookupResult.uid
+            ? <p className="text-xs" style={{ color: 'var(--accent-green)' }}>✓ RAKSHA account found — they'll receive push notifications</p>
+            : <p className="text-xs" style={{ color: 'var(--accent-amber)' }}>⚠ No RAKSHA account found — ask them to sign up with this email</p>
+        )}
       </div>
 
       <div className="input-group">
@@ -201,7 +243,7 @@ export function TrustedContactsScreen() {
   useEffect(() => { void loadContacts() }, [uid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Save (add or edit) ────────────────────────────────────────────────────
-  async function handleSave(values: ContactFormValues) {
+  async function handleSave(values: ContactFormValues, rakshaUid: string | null) {
     const contacts = contactsState.kind === 'loaded' ? contactsState.contacts : []
     setSaving(true)
     try {
@@ -209,8 +251,14 @@ export function TrustedContactsScreen() {
       if (formState.kind === 'editing') {
         const c = formState.contact
         await setDoc(doc(db, 'trusted_contacts', c.id), {
-          ...c, ...values,
-          updatedAt: now,
+          ...c,
+          name:             values.name.trim(),
+          phoneNumber:      values.phoneNumber.trim(),
+          email:            values.email.trim().toLowerCase(),
+          contactRakshaUid: rakshaUid ?? c.contactRakshaUid,
+          relationship:     values.relationship.trim(),
+          notifyOnSOS:      values.notifyOnSOS,
+          updatedAt:        now,
         })
       } else {
         const id = crypto.randomUUID()
@@ -219,6 +267,8 @@ export function TrustedContactsScreen() {
           ownerUserId:           uid,
           name:                  values.name.trim(),
           phoneNumber:           values.phoneNumber.trim(),
+          email:                 values.email.trim().toLowerCase(),
+          contactRakshaUid:      rakshaUid,
           relationship:          values.relationship.trim(),
           notifyOnSOS:           values.notifyOnSOS,
           notifyOnDigitalThreat: false,
@@ -343,6 +393,7 @@ export function TrustedContactsScreen() {
           initial={{
             name:         formState.contact.name,
             phoneNumber:  formState.contact.phoneNumber,
+            email:        formState.contact.email,
             relationship: formState.contact.relationship,
             notifyOnSOS:  formState.contact.notifyOnSOS,
           }}
@@ -372,15 +423,25 @@ export function TrustedContactsScreen() {
                   <div>
                     <p style={{ fontWeight: 600 }}>{c.name}</p>
                     <p className="text-muted text-sm">{c.phoneNumber}</p>
+                    {c.email && <p className="text-muted text-xs">{c.email}</p>}
                     {c.relationship && (
                       <p className="text-muted text-xs">{c.relationship}</p>
                     )}
                   </div>
-                  <span className={`chip ${c.notifyOnSOS ? 'chip-green' : ''}`}
-                    style={!c.notifyOnSOS ? { background: 'var(--surface-3)', color: 'var(--text-muted)' } : undefined}
-                  >
-                    {c.notifyOnSOS ? '✓ SOS' : 'No SOS'}
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-end' }}>
+                    <span className={`chip ${c.notifyOnSOS ? 'chip-green' : ''}`}
+                      style={!c.notifyOnSOS ? { background: 'var(--surface-3)', color: 'var(--text-muted)' } : undefined}
+                    >
+                      {c.notifyOnSOS ? '✓ SOS' : 'No SOS'}
+                    </span>
+                    {c.email && (
+                      <span className={`chip ${c.contactRakshaUid ? 'chip-green' : 'chip-amber'}`}
+                        style={{ fontSize: '0.65rem' }}
+                      >
+                        {c.contactRakshaUid ? '📲 Linked' : '⚠ Not linked'}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
