@@ -45,6 +45,7 @@ interface CountdownState {
   error: string | null
   acceptedGuardianCount: number
   dispatchState: 'searching' | 'guardians_pinged' | 'contacts_notified' | 'no_response'
+  contactsNotified: boolean   // true whenever contactsNotified[] is non-empty on the session doc
   cancelBlocked: boolean  // true when session is active and cannot be cancelled
 }
 
@@ -59,6 +60,7 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
     error: null,
     acceptedGuardianCount: 0,
     dispatchState: 'searching',
+    contactsNotified: false,
     cancelBlocked: false,
   })
 
@@ -180,14 +182,17 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
 
           // Derive dispatch state from what onSOSSessionUpdate wrote.
           // guardiansPinged is set when at least one guardian was found.
-          // contactsNotified is set when no guardians found, fell back to contacts.
-          // Neither set means the function either hasn't run yet or found nobody.
+          // contactsNotified is set whenever contacts were notified — including
+          // alongside guardiansPinged (both paths now write it per the fix in
+          // onSOSSessionUpdate). Neither set means the function hasn't run yet
+          // or found nobody to notify.
           const guardiansPinged: unknown[] = data['guardiansPinged'] ?? []
           const contactsNotified: unknown[] = data['contactsNotified'] ?? []
           let dispatchState: CountdownState['dispatchState'] = 'searching'
           if (guardiansPinged.length > 0) {
             dispatchState = 'guardians_pinged'
           } else if (contactsNotified.length > 0) {
+            // Fallback path: contacts notified, no guardian found
             dispatchState = 'contacts_notified'
           } else if (serverStatus === 'active') {
             // Session is active but nothing was written — onSOSSessionUpdate ran
@@ -198,14 +203,14 @@ export function useCountdown(triggeredAt: Date, triggerType: string) {
 
           if (serverStatus === 'active') {
             stopTimer()
-            setState((s) => ({ ...s, status: 'active', dispatchState }))
+            setState((s) => ({ ...s, status: 'active', dispatchState, contactsNotified: contactsNotified.length > 0 }))
           } else if (serverStatus === 'cancelled') {
             stopTimer()
-            setState((s) => ({ ...s, status: 'cancelled', dispatchState }))
+            setState((s) => ({ ...s, status: 'cancelled', dispatchState, contactsNotified: contactsNotified.length > 0 }))
           } else {
             // Status unchanged — still update dispatchState in case onSOSSessionUpdate
             // wrote guardiansPinged/contactsNotified before the status transition
-            setState((s) => ({ ...s, dispatchState }))
+            setState((s) => ({ ...s, dispatchState, contactsNotified: contactsNotified.length > 0 }))
           }
         },
         (err) => {

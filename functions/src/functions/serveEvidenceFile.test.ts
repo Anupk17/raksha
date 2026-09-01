@@ -179,9 +179,14 @@ describe("serveEvidenceFile — error paths", () => {
     const kms = new KMSMock();
     const plaintext = Buffer.from("file");
     const { doc, encryptedBytes } = await makeEncryptedDoc(kms, plaintext);
-    const badKms = new KMSMock(); // different instance — doesn't know the key
+    // Use a KMS stub that unconditionally rejects — the stateless KMSMock cannot
+    // simulate cross-instance isolation (it decrypts any MOCK:-prefixed DEK).
+    const rejectingKms = {
+      generateDataEncryptionKey: vi.fn(),
+      decryptDataEncryptionKey: vi.fn().mockRejectedValue(new Error("KMS unavailable")),
+    } as unknown as KMSMock;
     const { db } = makeDb(doc);
-    const err = await runServeEvidenceFile("ev-001", "user-001", db, makeBucket(encryptedBytes), badKms, makeLogger(), KEY_RING).catch(e => e);
+    const err = await runServeEvidenceFile("ev-001", "user-001", db, makeBucket(encryptedBytes), rejectingKms, makeLogger(), KEY_RING).catch(e => e);
     expect(err.code).toBe("INTERNAL");
   });
 

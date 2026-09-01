@@ -36,6 +36,7 @@ export function CountdownScreen() {
   const {
     secondsLeft, status, sessionId, locationWarning,
     error, cancel, acceptedGuardianCount, dispatchState, cancelBlocked,
+    contactsNotified,
   } = useCountdown(triggeredAt, triggerType)
 
   // Auto-redirect after cancellation
@@ -113,6 +114,16 @@ export function CountdownScreen() {
           <div className="banner banner-warning" role="status" aria-live="polite"
             style={{ maxWidth: '300px' }}>
             No guardians were nearby. Your emergency contacts have been notified instead.
+          </div>
+        )}
+
+        {/* Show "contacts also notified" in the guardian-found path — contacts are always
+            notified when an SOS activates, so surface this as reassurance when a guardian
+            was also dispatched. */}
+        {contactsNotified && dispatchState !== 'contacts_notified' && (
+          <div className="banner banner-info" role="status" aria-live="polite"
+            style={{ maxWidth: '300px', fontSize: '0.875rem' }}>
+            📲 Your emergency contacts have also been notified.
           </div>
         )}
 

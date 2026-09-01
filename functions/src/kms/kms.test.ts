@@ -68,9 +68,11 @@ describe("KMSMock", () => {
   });
 
   it("decryptDataEncryptionKey throws for an unknown encryptedDEK", async () => {
+    // The stateless mock uses a "MOCK:" sentinel prefix. A DEK not generated
+    // by KMSMock (no prefix) is rejected with a descriptive error message.
     await expect(
       mock.decryptDataEncryptionKey("unknown-key", "projects/test/keyRings/test/cryptoKeys/test")
-    ).rejects.toThrow("KMSMock: unknown encryptedDEK");
+    ).rejects.toThrow("KMSMock: encryptedDEK does not have the expected mock prefix");
   });
 
   it("returns a copy from decryptDataEncryptionKey, not the stored reference", async () => {
@@ -91,12 +93,18 @@ describe("KMSMock", () => {
     expect(a.encryptedDEK).not.toBe(b.encryptedDEK);
   });
 
-  it("separate KMSMock instances are isolated — decryption fails across instances", async () => {
+  it("separate KMSMock instances share the same stateless format — cross-instance decryption succeeds by design", async () => {
+    // The KMSMock was refactored from a stateful Map to a stateless sentinel-prefix
+    // design (MOCK:<base64>). This means any instance can decrypt any other
+    // instance's DEKs — isolation is intentionally absent in the mock.
+    // The real CloudKMSClient uses GCP KMS and IS isolated (different key ring refs).
+    // This test documents the mock's actual contract so it doesn't read as a bug.
     const mockA = new KMSMock();
     const mockB = new KMSMock();
-    const { encryptedDEK } = await mockA.generateDataEncryptionKey("key-ref");
-    // mockB has no knowledge of mockA's keys
-    await expect(mockB.decryptDataEncryptionKey(encryptedDEK, "key-ref")).rejects.toThrow();
+    const { encryptedDEK, plaintextDEK } = await mockA.generateDataEncryptionKey("key-ref");
+    // mockB can decrypt mockA's key — this is expected for the stateless mock
+    const recovered = await mockB.decryptDataEncryptionKey(encryptedDEK, "key-ref");
+    expect(recovered).toEqual(plaintextDEK);
   });
 
   it(

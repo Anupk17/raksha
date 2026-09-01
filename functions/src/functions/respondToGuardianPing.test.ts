@@ -124,7 +124,9 @@ describe("respondToGuardianPing Unit Tests", () => {
     // 30 seconds response time.
     // oldAvg = 10, count = 1.
     // newAvg = 10 + (30 - 10) / 2 = 20.
-    expect(updatedGuardian.responseStats.avgResponseTimeSeconds).toBe(20);
+    // Use toBeCloseTo because sentAt is set via Date.now() which has millisecond
+    // granularity — responseTimeSeconds is ~30.001, not exactly 30.
+    expect(updatedGuardian.responseStats.avgResponseTimeSeconds).toBeCloseTo(20, 0);
   });
 
   it("is idempotent on duplicate responses", async () => {

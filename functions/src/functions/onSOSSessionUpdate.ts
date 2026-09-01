@@ -197,17 +197,21 @@ export async function runOnSOSSessionUpdate(
   const contactIds = contactsSnap.docs.map((doc) => doc.id);
 
   if (contactIds.length > 0) {
-    if (pingedIds.length === 0) {
-      // No guardians found — write contactsNotified so UI shows fallback state
-      await db.runTransaction(async (tx) => {
-        const doc = await tx.get(sessionRef);
-        if (!doc.exists) return;
-        const data = doc.data() as SOSSession;
-        const currentNotified = data.contactsNotified ?? [];
-        const merged = Array.from(new Set([...currentNotified, ...contactIds]));
-        tx.update(sessionRef, { contactsNotified: merged });
-      });
-    }
+    // Always write contactsNotified — the Firestore record must reflect reality.
+    // Contacts are notified in BOTH paths (guardian-found and no-guardian fallback),
+    // so the session document must record this in both cases. This is required for:
+    //   1. The SOS Active screen to truthfully show "your contacts were also notified"
+    //      even when a guardian was dispatched.
+    //   2. Audit / legal export accuracy — the record should never show contacts
+    //      were NOT notified when they actually were.
+    await db.runTransaction(async (tx) => {
+      const doc = await tx.get(sessionRef);
+      if (!doc.exists) return;
+      const data = doc.data() as SOSSession;
+      const currentNotified = data.contactsNotified ?? [];
+      const merged = Array.from(new Set([...currentNotified, ...contactIds]));
+      tx.update(sessionRef, { contactsNotified: merged });
+    });
 
     // Send FCM push to all linked contacts regardless of guardian path
     await Promise.allSettled(

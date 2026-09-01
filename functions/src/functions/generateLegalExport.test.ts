@@ -6,17 +6,16 @@
  *
  * Content-verification approach:
  *   pdfkit is called with { pdfVersion: "1.3", compress: false } so that
- *   pdf-parse (pdf.js v1.10.100) can extract text reliably.
+ *   text content is hex-encoded in TJ array operators and can be extracted
+ *   without a PDF parser.
  *
- *   Root cause of earlier "bad XRef entry" / "Invalid number" failures:
- *     Buffer.concat() returns a Buffer backed by a shared ArrayBuffer pool
- *     with a non-zero byteOffset.  pdf-parse passes the raw .buffer
- *     (ArrayBuffer) to pdf.js, which always reads from offset 0 — i.e. into
- *     pool memory before the actual PDF bytes — corrupting XRef / number
- *     parsing.  Fix: parsePdfText() wraps the Buffer in `new Uint8Array(buf)`
- *     which copies bytes into a fresh ArrayBuffer at offset 0.
+ *   pdf-parse (pdf.js v1.10.100) was tried but consistently fails with
+ *   "bad XRef entry" on pdfkit's multi-page output — pdf.js misparses the
+ *   binary font streams embedded by pdfkit in the XRef table. The fix is to
+ *   bypass pdf-parse entirely and extract text by finding all <hexstring>
+ *   sequences in the raw PDF binary and decoding them (see parsePdfText below).
  *
- *   Tests parse the generated PDF with pdf-parse and assert on the extracted text:
+ *   Tests assert on the extracted text:
  *   1. incidentId appears on the cover page
  *   2. each evidence item's evidenceId appears in a section header
  *   3. chain-of-custody action and performedBy appear in the extracted text
@@ -24,8 +23,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as fc from "fast-check";
-// @ts-ignore — pdf-parse has no bundled types
-import pdfParse from "pdf-parse";
+// pdf-parse was removed — replaced by the hex-extraction parsePdfText helper below.
 import { runGenerateLegalExport } from "./generateLegalExport.js";
 import { aesGcmEncrypt } from "../utils/aesGcm.js";
 import type { Firestore } from "firebase-admin/firestore";
@@ -41,20 +39,35 @@ const TINY_VALID_PNG = Buffer.from(
 );
 
 // ---------------------------------------------------------------------------
-// Helper: parse PDF buffer and return extracted text
+// Helper: extract text from a pdfkit-generated PDF buffer.
 //
-// Root cause of earlier "bad XRef entry" / "Invalid number" failures:
-//   Buffer.concat() returns a Buffer backed by a shared ArrayBuffer pool with
-//   a non-zero byteOffset.  pdf-parse passes the raw .buffer (ArrayBuffer) to
-//   pdf.js, which always reads from offset 0 — i.e. into pool memory before
-//   the actual PDF bytes — causing corrupt XRef / number-parse errors.
+// pdfkit with compress:false encodes all text as hex sequences inside TJ
+// array operators, e.g. [<496e636964656e7420494...> 30 <...>] TJ. This
+// function finds every <hexstring> in the raw PDF and decodes it, giving
+// reliable text extraction without depending on pdf-parse's internal pdf.js
+// XRef parser — which consistently fails on pdfkit's multi-page output
+// (pdf.js v1.10.100 cannot handle pdfkit's binary font streams in the XRef
+// table, causing "bad XRef entry" errors).
 //
-//   Fix: `new Uint8Array(buf)` copies the bytes into a fresh ArrayBuffer whose
-//   byteOffset is 0, so pdf.js sees the correct data.
+// This is only correct for pdfkit+compress:false output — it is NOT a
+// general-purpose PDF text extractor.
 // ---------------------------------------------------------------------------
-async function parsePdfText(buf: Buffer): Promise<string> {
-  const data = await pdfParse(Buffer.from(new Uint8Array(buf)));
-  return data.text as string;
+function parsePdfText(buf: Buffer): string {
+  const raw = buf.toString("binary");
+  const hexPattern = /<([0-9a-fA-F]+)>/g;
+  const segments: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = hexPattern.exec(raw)) !== null) {
+    const hex = match[1];
+    if (hex.length % 2 === 0 && hex.length >= 2) {
+      const decoded = Buffer.from(hex, "hex").toString("latin1");
+      // Filter out binary/non-printable characters that come from font data
+      if (/[\x20-\x7e]/.test(decoded)) {
+        segments.push(decoded);
+      }
+    }
+  }
+  return segments.join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +317,7 @@ describe("generateLegalExport", () => {
     );
 
     // Parse the PDF text
-    const text = await parsePdfText(pdfBuffer);
+    const text = parsePdfText(pdfBuffer);
 
     // 1. incidentId appears on the cover page
     expect(text).toContain(INCIDENT_ID);
@@ -353,7 +366,7 @@ describe("generateLegalExport", () => {
       mockLogger, TEST_KEY_RING_REF
     );
 
-    const text = await parsePdfText(pdfBuffer);
+    const text = parsePdfText(pdfBuffer);
 
     // incidentId and evidenceId must both be present
     expect(text).toContain("incident-solo");
@@ -374,7 +387,7 @@ describe("generateLegalExport", () => {
     for (let i = 0; i < 3; i++) {
       const dek = crypto.randomBytes(32);
       const iv  = crypto.randomBytes(12);
-      const { doc, encryptedBytes } = makeEvidence(`ev-count-00${i}`, "incident-count", "user-count", dek, iv);
+      const { doc, encryptedBytes } = makeEvidence(`ev-count-00${i}`, "incident-count", "user-count", dek, iv, []);
       deks.set(dek.toString("base64"), dek);
       docs.push(doc);
       fileBuffers.set(doc.storageRef, encryptedBytes);
@@ -387,7 +400,7 @@ describe("generateLegalExport", () => {
       makeKms(deks), mockLogger, TEST_KEY_RING_REF
     );
 
-    const text = await parsePdfText(pdfBuffer);
+    const text = parsePdfText(pdfBuffer);
     expect(text).toContain("Total evidence items: 3");
     for (let i = 0; i < 3; i++) {
       expect(text).toContain(`ev-count-00${i}`);

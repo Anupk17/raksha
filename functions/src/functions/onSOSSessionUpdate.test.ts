@@ -282,6 +282,58 @@ describe("onSOSSessionUpdate Unit Tests", () => {
     expect(updated.contactsNotified).toEqual(["contact-1"]);
   });
 
+  it("writes contactsNotified even when a guardian is found (guardian-found path)", async () => {
+    // This test explicitly covers the previously-undetected safety gap:
+    // contacts were always notified via FCM but contactsNotified was NOT written
+    // to the session document when a guardian was dispatched. The Firestore record
+    // must now reflect reality in both paths.
+    const db = new MockDb();
+    const victimId = "victim-guardian-path";
+
+    // One nearby guardian (within 1km)
+    db.store.set(`guardians/g1`, {
+      guardianId: "g1",
+      verificationStatus: "verified",
+      onDuty: true,
+      currentLocation: { latitude: 10.004, longitude: 10.0 }, // ~444m
+    });
+
+    // One trusted contact with SOS notifications enabled
+    db.store.set(`trusted_contacts/contact-1`, {
+      id: "contact-1",
+      ownerUserId: victimId,
+      notifyOnSOS: true,
+      contactRakshaUid: null, // FCM send is a no-op without a UID — we're testing the field write
+    });
+
+    const before = { sessionId: "session-gp", userId: victimId, status: "countdown" } as any;
+    const after = {
+      sessionId: "session-gp",
+      userId: victimId,
+      status: "active",
+      location: {
+        latHash: "hash",
+        lngHash: "hash",
+        current: { latitude: 10, longitude: 10 },
+      },
+      triggeredAt: new Date(),
+      createdAt: new Date(),
+    } as any;
+    db.store.set(`sosSessions/session-gp`, after);
+
+    const change = makeChangeMock(before, after);
+    await runOnSOSSessionUpdate(change, db as any);
+
+    const updated = db.updatedSessions.get("session-gp");
+
+    // Guardian was dispatched — guardiansPinged must be written
+    expect(updated.guardiansPinged).toEqual(["g1"]);
+
+    // Contacts must ALSO be written even though a guardian was found —
+    // this is the specific field that was previously missing in this path.
+    expect(updated.contactsNotified).toEqual(["contact-1"]);
+  });
+
   it("absorbs ALREADY_EXISTS errors to support resumable triggers", async () => {
     const db = new MockDb();
     const victimId = "victim-1";

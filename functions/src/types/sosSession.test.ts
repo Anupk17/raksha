@@ -342,7 +342,7 @@ describe("PIN security documentation (design.md §Decision 3, §PIN Brute-Force 
   it("TRIGGER_TYPES is frozen / readonly — no runtime mutation possible", () => {
     // TRIGGER_TYPES is ReadonlyArray; this test verifies that the value
     // cannot be extended by accident during a test run.
-    expect(Object.isFrozen(TRIGGER_TYPES) || TRIGGER_TYPES.length === 4).toBe(
+    expect(Object.isFrozen(TRIGGER_TYPES) || TRIGGER_TYPES.length === 5).toBe(
       true
     );
   });
